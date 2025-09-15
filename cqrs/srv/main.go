@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	stdSQL "database/sql"
-	"fmt"
 	"time"
 
 	"github.com/ThreeDotsLabs/watermill/message/router/middleware"
@@ -19,17 +18,21 @@ import (
 )
 
 var (
-	topic       = "OrderPlaced"
 	ctx         = context.Background()
 	logger      = watermill.NewStdLogger(false, false)
 	redisClient = redis.NewClient(&redis.Options{Addr: "127.0.0.1:6379"})
 	db          = mustNew(stdSQL.Open("postgres", "postgres://Doubl:@127.0.0.1:5432/testdb?sslmode=disable")).(*stdSQL.DB)
+	epoch       = time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC).UnixNano() / int64(time.Millisecond) // 例：epoch 设为 2020-01-01 00:00:00 UTC 的毫秒数
+	sf          = mustNew(NewSnowflake(2, epoch)).(*Snowflake)
 	marshaler   = cqrs.JSONMarshaler{
 		GenerateName: cqrs.StructName,
 	}
 )
 
 func main() {
+	mustCall(MigrateDB(db))
+	repo := NewRepository(db)
+
 	publisher := mustNew(redisstream.NewPublisher(redisstream.PublisherConfig{
 		Client: redisClient,
 	}, logger)).(*redisstream.Publisher)
@@ -55,7 +58,7 @@ func main() {
 
 	router := message.NewDefaultRouter(logger)
 	router.AddMiddleware(delayedRequeuer.Middleware()...)
-	router.AddMiddleware(notifyMiddleware(publisher))
+	// router.AddMiddleware(notifyMiddleware(publisher))
 	eventProcessor := mustNew(cqrs.NewEventProcessorWithConfig(router, cqrs.EventProcessorConfig{
 		GenerateSubscribeTopic: func(params cqrs.EventProcessorGenerateSubscribeTopicParams) (string, error) {
 			return params.EventName, nil
@@ -87,38 +90,79 @@ func main() {
 	mustCall(eventProcessor.AddHandlers(
 		cqrs.NewEventHandler(
 			"OnOrderPlacedHandler",
-			func(ctx context.Context, event *OrderPlaced) error {
-				if event.OrderID == "" {
-					fmt.Println("ERROR: Received order placed without order_id")
-					return fmt.Errorf("empty order_id")
+			func(ctx context.Context, ev *OrderPlaced) error {
+				err := repo.CreateOrder(ctx, &Order{OrderId: ev.OrderId, State: 101, UserId: ev.UserId})
+				if err != nil {
+					return err
 				}
-				fmt.Printf("Received %v order placed\n", event.Customer.Name)
-				return nil
+				trxState := TrxState{}
+				trxState.TrxId = ev.TrxId
+				trxState.Type = 101
+				trxState.State = 1006
+				trxState.Name = "待支付"
+				trxState.Progress = 100
+				eventBus.Publish(ctx, &trxState)
+				time.Sleep(3 * time.Second)
+				return err
 			},
 		),
 	))
 
-	i := 0
 	mustCall(commandProcessor.AddHandlers(
 		cqrs.NewCommandHandler(
 			"PlaceOrderHandler",
 			func(ctx context.Context, cmd *PlaceOrderCommand) error {
-				// 处理写操作：比如存数据库
-				fmt.Printf("Handling PlaceOrderCommand for customer: %v\n", cmd.Customer.Name)
-				// 处理完成后触发 OrderPlaced 事件
-				e := OrderPlaced{
-					RequestID: cmd.RequestID,
-					OrderID:   watermill.NewUUID(),
-					Customer:  cmd.Customer,
-					Products:  cmd.Products,
-					Address:   cmd.Address,
+				// 接受请求
+				trxState := TrxState{}
+				trxState.TrxId = cmd.TrxId
+				trxState.Type = 101
+				trxState.State = 1001
+				trxState.Name = "接受请求"
+				trxState.Progress = 10
+				eventBus.Publish(ctx, &trxState)
+				time.Sleep(3 * time.Second)
+				// 正在锁定库存
+				trxState = TrxState{}
+				trxState.TrxId = cmd.TrxId
+				trxState.Type = 101
+				trxState.State = 1002
+				trxState.Name = "正在锁定库存"
+				trxState.Progress = 20
+				eventBus.Publish(ctx, &trxState)
+				time.Sleep(3 * time.Second)
+				// 锁定库存成功
+				trxState = TrxState{}
+				trxState.TrxId = cmd.TrxId
+				trxState.Type = 101
+				trxState.State = 1003
+				trxState.Name = "锁定库存成功"
+				trxState.Progress = 30
+				eventBus.Publish(ctx, &trxState)
+				time.Sleep(3 * time.Second)
+				// 计算订单价格
+				trxState = TrxState{}
+				trxState.TrxId = cmd.TrxId
+				trxState.Type = 101
+				trxState.State = 1004
+				trxState.Name = "正在计算订单价格"
+				trxState.Progress = 40
+				eventBus.Publish(ctx, &trxState)
+				time.Sleep(3 * time.Second)
+				// 生成待支付单
+				trxState = TrxState{}
+				trxState.TrxId = cmd.TrxId
+				trxState.Type = 101
+				trxState.State = 1005
+				trxState.Name = "生成待支付单"
+				trxState.Progress = 50
+				eventBus.Publish(ctx, &trxState)
+				time.Sleep(3 * time.Second)
+				orderPlaced := OrderPlaced{
+					TrxId:   cmd.TrxId,
+					OrderId: sf.NextID(),
+					UserId:  cmd.UserId,
 				}
-				i++
-				if i == 10 {
-					e.OrderID = ""
-					i = 0
-				}
-				return eventBus.Publish(ctx, &e)
+				return eventBus.Publish(ctx, &orderPlaced)
 			},
 		),
 	))

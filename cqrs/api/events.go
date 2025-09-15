@@ -1,35 +1,20 @@
 package main
 
 type PlaceOrderCommand struct {
-	RequestID string   `json:"request_id"`
-	Customer  Customer `json:"customer"`
-	Products  []Product
-	Address   Address
+	TrxId  int64 `json:"trxid"`
+	UserId int64 `json:"user_id"`
 }
 
-type OrderPlaced struct {
-	RequestID string    `json:"request_id"`
-	OrderID   string    `json:"order_id"`
-	Customer  Customer  `json:"customer"`
-	Address   Address   `json:"address"`
-	Products  []Product `json:"products"`
+type TrxState struct {
+	TrxId    int64  `json:"trxid"`
+	Type     int    `json:"type"`
+	State    int    `json:"state"`
+	Name     string `json:"name"`
+	Progress int    `json:"progress"`
 }
 
-type Customer struct {
-	ID    string `json:"id"`
-	Name  string `json:"name"`
-	Email string `json:"email"`
-	Phone string `json:"phone"`
-}
-
-type Address struct {
-	Street  string `json:"street"`
-	City    string `json:"city"`
-	Zip     string `json:"zip"`
-	Country string `json:"country"`
-}
-
-type Product struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
+type TrxStateUpdated struct {
+	Type     int    `json:"type"`
+	State    string `json:"state"`
+	Progress int    `json:"progress"`
 }
