@@ -89,7 +89,7 @@ func main() {
 
 	mustCall(eventProcessor.AddHandlers(
 		cqrs.NewEventHandler(
-			"OnOrderPlacedHandler",
+			"OrderPlacedHandler",
 			func(ctx context.Context, ev *OrderPlaced) error {
 				err := repo.CreateOrder(ctx, &Order{OrderId: ev.OrderId, State: 101, UserId: ev.UserId})
 				if err != nil {

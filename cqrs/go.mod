@@ -7,7 +7,6 @@ require (
 	github.com/ThreeDotsLabs/watermill-http/v2 v2.3.1
 	github.com/ThreeDotsLabs/watermill-redisstream v1.4.4
 	github.com/ThreeDotsLabs/watermill-sql/v4 v4.0.0
-	github.com/brianvoe/gofakeit/v6 v6.28.0
 	github.com/gin-gonic/gin v1.10.1
 	github.com/lib/pq v1.10.9
 	github.com/redis/go-redis/v9 v9.12.1

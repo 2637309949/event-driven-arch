@@ -36,19 +36,11 @@ func main() {
 	mustCall(MigrateDB(db))
 	repo := NewRepository(db)
 
-	subscriber := mustNew(redisstream.NewSubscriber(
-		redisstream.SubscriberConfig{
-			Client: redisClient,
-		},
-		logger,
-	)).(*redisstream.Subscriber)
+	subscriber := mustNew(redisstream.NewSubscriber(redisstream.SubscriberConfig{Client: redisClient}, logger)).(*redisstream.Subscriber)
 	publisher := mustNew(redisstream.NewPublisher(redisstream.PublisherConfig{
 		Client: redisClient,
 	}, logger)).(*redisstream.Publisher)
-	router, err := message.NewRouter(message.RouterConfig{}, logger)
-	if err != nil {
-		panic(err)
-	}
+	router := mustNew(message.NewRouter(message.RouterConfig{}, logger)).(*message.Router)
 	router.AddPlugin(plugin.SignalsHandler)
 	router.AddMiddleware(middleware.Recoverer)
 	eventProcessor := mustNew(cqrs.NewEventProcessorWithConfig(router, cqrs.EventProcessorConfig{
