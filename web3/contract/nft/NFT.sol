@@ -2,7 +2,7 @@
 pragma solidity ^0.8.0;
 
 /*
- Practical NFT contract using OpenZeppelin v4.8 (raw imports suitable for Remix).
+ NFT contract using OpenZeppelin v4.8 (raw imports suitable for Remix).
  Features:
   - ERC721Enumerable
   - Owner controls: mint, toggle sale/whitelist, set base URI, withdraw
@@ -18,7 +18,7 @@ import "../openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "../openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
 import "../openzeppelin/contracts/utils/Strings.sol";
 
-contract PracticalNFT is ERC721Enumerable, Ownable, ReentrancyGuard {
+contract NFT is ERC721Enumerable, Ownable, ReentrancyGuard {
     using Strings for uint256;
 
     // Sale params
