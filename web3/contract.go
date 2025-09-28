@@ -79,7 +79,7 @@ func (c *Contract) Watch(ctx context.Context) error {
 				if len(nc.Topics) > 3 {
 					ev.Topic3 = nc.Topics[3].Hex()
 				}
-				ev.Data = string(nc.Data)
+				ev.Data = nc.Data
 				c.eventBus.Publish(ctx, ev)
 			case ev := <-itemSetChan:
 				cmd := ItemSetCommand{}

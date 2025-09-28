@@ -52,7 +52,7 @@ type EventLog struct {
 	Topic1          string
 	Topic2          string
 	Topic3          string
-	Data            string
+	Data            []byte
 	CreatedAt       time.Time
 }
 
@@ -115,12 +115,34 @@ func NewRouters(ctx context.Context, cfg *Config, repo *Repository) (*Routers, e
 				fmt.Printf("EventParsed EventName=%v, TxHash=%v\n", ev.EventName, ev.TxHash)
 				eventName := ev.EventName
 				switch eventName {
+				case "Revealed":
+					contractAbi, _ := abi.JSON(strings.NewReader(nft.NftABI))
+					var revealed bool
+					err := contractAbi.UnpackIntoInterface(&revealed, "Revealed", ev.Data)
+					if err != nil {
+						log.Println("Unpack Revealed err:", err)
+						return err
+					}
+					ep := EventParsed{
+						TxHash:          ev.TxHash,
+						LogIndex:        ev.LogIndex,
+						BlockNumber:     ev.BlockNumber,
+						BlockTime:       ev.BlockTime,
+						ContractAddress: ev.ContractAddress,
+						EventName:       ev.EventName,
+						Metadata:        fmt.Sprintf(`{"revealed":%v}`, revealed),
+					}
+					err = repo.InsertEventParsed(ctx, &ep)
+					if err != nil {
+						log.Println("InsertEventParsed err:", err)
+						return err
+					}
 				case "Transfer":
 					contractAbi, _ := abi.JSON(strings.NewReader(nft.NftABI))
 					from := common.HexToAddress(ev.Topic1)
 					to := common.HexToAddress(ev.Topic2)
 					var out []interface{}
-					err := contractAbi.UnpackIntoInterface(&out, "Transfer", []byte(ev.Data))
+					err := contractAbi.UnpackIntoInterface(&out, "Transfer", ev.Data)
 					if err != nil {
 						log.Println("Unpack err:", err)
 						return err
@@ -140,6 +162,65 @@ func NewRouters(ctx context.Context, cfg *Config, repo *Repository) (*Routers, e
 						ToAddress:       to.Hex(),
 						TokenID:         valueOrTokenId,
 						Value:           valueOrTokenId,
+					}
+					err = repo.InsertEventParsed(ctx, &ep)
+					if err != nil {
+						log.Println("InsertEventParsed err:", err)
+						return err
+					}
+				case "Minted":
+					contractAbi, _ := abi.JSON(strings.NewReader(nft.NftABI))
+					var out []interface{}
+					err := contractAbi.UnpackIntoInterface(&out, "Minted", ev.Data)
+					if err != nil {
+						log.Println("Unpack Minted err:", err)
+						return err
+					}
+
+					var to common.Address
+					var tokenId *big.Int
+
+					if len(out) > 0 {
+						to = *abi.ConvertType(out[0], new(common.Address)).(*common.Address)
+					}
+					if len(out) > 1 {
+						tokenId = *abi.ConvertType(out[1], new(*big.Int)).(**big.Int)
+					}
+					ep := EventParsed{
+						TxHash:          ev.TxHash,
+						LogIndex:        ev.LogIndex,
+						BlockNumber:     ev.BlockNumber,
+						BlockTime:       ev.BlockTime,
+						ContractAddress: ev.ContractAddress,
+						EventName:       ev.EventName,
+						FromAddress:     "", // Mint 没有 from
+						ToAddress:       to.Hex(),
+						TokenID:         tokenId,
+						Value:           tokenId,
+					}
+					err = repo.InsertEventParsed(ctx, &ep)
+					if err != nil {
+						log.Println("InsertEventParsed err:", err)
+						return err
+					}
+				case "SaleToggled":
+					contractAbi, _ := abi.JSON(strings.NewReader(nft.NftABI))
+					var saleActive bool
+					err := contractAbi.UnpackIntoInterface(&saleActive, "SaleToggled", ev.Data)
+					if err != nil {
+						log.Println("Unpack SaleToggled err:", err)
+						return err
+					}
+					ep := EventParsed{
+						TxHash:          ev.TxHash,
+						LogIndex:        ev.LogIndex,
+						BlockNumber:     ev.BlockNumber,
+						BlockTime:       ev.BlockTime,
+						ContractAddress: ev.ContractAddress,
+						EventName:       ev.EventName,
+						FromAddress:     "",
+						ToAddress:       "",
+						Metadata:        fmt.Sprintf(`{"saleActive":%v}`, saleActive),
 					}
 					err = repo.InsertEventParsed(ctx, &ep)
 					if err != nil {

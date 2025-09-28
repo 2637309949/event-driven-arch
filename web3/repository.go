@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS event_raw (
     topic1            CHAR(66),                       -- indexed 参数2
     topic2            CHAR(66),                       -- indexed 参数3
     topic3            CHAR(66),                       -- indexed 参数4
-    data              JSONB,                          -- 非 indexed 参数原始 JSON
+    data              BYTEA,                          -- 非 indexed 参数原始 
     created_at        TIMESTAMP DEFAULT NOW()         -- 插入时间
 );
 ALTER TABLE event_raw ADD CONSTRAINT uq_tx_log UNIQUE (tx_hash, log_index);
@@ -68,10 +68,10 @@ func (s *Repository) InsertEventRaw(ctx context.Context, ev *EventRaw) error {
 	_, err := s.db.ExecContext(ctx, `
 		INSERT INTO event_raw (
 			tx_hash, log_index, block_number, block_time, contract_address, 
-			event_signature, event_name, topic0, topic1, topic2, topic3, data, created_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+			event_signature, event_name, topic0, topic1, topic2, topic3, data
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
 		ev.TxHash, ev.LogIndex, ev.BlockNumber, ev.BlockTime, ev.ContractAddress,
-		ev.EventSignature, ev.EventName, ev.Topic0, ev.Topic1, ev.Topic2, ev.Topic3, ev.Data, ev.CreatedAt)
+		ev.EventSignature, ev.EventName, ev.Topic0, ev.Topic1, ev.Topic2, ev.Topic3, ev.Data)
 	if err != nil {
 		return err
 	}
@@ -79,22 +79,14 @@ func (s *Repository) InsertEventRaw(ctx context.Context, ev *EventRaw) error {
 }
 
 func (s *Repository) InsertEventParsed(ctx context.Context, ep *EventParsed) error {
-	tokenIDStr := ""
-	if ep.TokenID != nil {
-		tokenIDStr = ep.TokenID.String()
-	}
-	valueStr := ""
-	if ep.Value != nil {
-		valueStr = ep.Value.String()
-	}
 	_, err := s.db.ExecContext(ctx, `
-        INSERT INTO contract_event_parsed (
+        INSERT INTO event_parsed (
             tx_hash, log_index, block_number, block_time, contract_address,
-            event_name, from_address, to_address, token_id, value, metadata, created_at
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+            event_name, from_address, to_address, token_id, value, metadata
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
     `,
 		ep.TxHash, ep.LogIndex, ep.BlockNumber, ep.BlockTime, ep.ContractAddress, ep.EventName,
-		ep.FromAddress, ep.ToAddress, tokenIDStr, valueStr, ep.Metadata, ep.CreatedAt,
+		ep.FromAddress, ep.ToAddress, ep.TokenID, ep.Value, ep.Metadata,
 	)
 	if err != nil {
 		return err

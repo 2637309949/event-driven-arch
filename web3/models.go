@@ -18,7 +18,7 @@ type EventRaw struct {
 	Topic1          string    `db:"topic1" json:"topic1"`
 	Topic2          string    `db:"topic2" json:"topic2"`
 	Topic3          string    `db:"topic3" json:"topic3"`
-	Data            string    `db:"data" json:"data"`
+	Data            []byte    `db:"data" json:"data"`
 	CreatedAt       time.Time `db:"created_at" json:"created_at"`
 }
 
