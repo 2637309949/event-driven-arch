@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>NFT</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <link rel="stylesheet" href="https://unpkg.com/mint-ui/lib/style.css">
+  <style>
+    html, body, #app {
+      height: 100%;
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #f5f5f5;
+    }
+    .content {
+      height: calc(100% - 50px); 
+      overflow-y: auto;
+      padding: 15px;
+      box-sizing: border-box;
+    }
+    .card-wrapper {
+      margin-top: 15px;
+    }
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr; 
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .stat-card {
+      background: #fff;
+      border-radius: 8px;
+      padding: 15px;
+      text-align: center;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+    }
+    .stat-value {
+      font-size: 20px;
+      font-weight: bold;
+      color: #409EFF;
+      margin-top: 5px;
+    }
+  </style>
+</head>
+<body>
+<div id="app">
+  <div class="content">
+    <div v-if="activeTab === 'home'" style="height:100%;">
+      <mt-loadmore :top-method="loadTop" :auto-fill="true" ref="loadmore" style="height:100%;">
+        <div>
+          <h2>首页</h2>
+          <div class="stats-grid">
+            <div class="stat-card" v-for="(item, index) in stats" :key="index">
+              <div class="stat-label">{{ item.label }}</div>
+              <div class="stat-value" :id="'stat-' + item.name"></div>
+            </div>
+          </div>
+          <div style="padding: 15px;">
+            <mt-button type="primary" size="large" @click="popupMintNFTVisible=true">
+              开始铸造
+            </mt-button>
+            <mt-popup :style="{width: '100%'}" v-model="popupMintNFTVisible" position="bottom">
+                <div  class="content">
+                  <mt-header :style="{ backgroundColor: 'unset', color: '#222' }" title="铸造 NFT"></mt-header>
+                  <div style="margin: 10px 0;">
+                    <mt-field v-model.number="mintQuantity" type="number" placeholder="输入数量" label="数量" :min="1"></mt-field>
+                  </div>
+                  <mt-button type="primary" size="large" @click="mintNFT(mintQuantity)">铸造</mt-button>
+                </div>
+            </mt-popup>
+          </div>
+        </div>
+      </mt-loadmore>
+    </div>
+    <div v-if="activeTab === 'me'">
+        <h2>我的</h2>
+        <div v-if="account">
+          <mt-cell title="账户地址">
+            <span style="color:gray;"> {{ account ? account.slice(0,24) + '...' : '' }}</span>
+          </mt-cell>
+          <mt-cell title="余额 (ETH)">
+            <span style="color:gray;">{{ balance }}</span>
+          </mt-cell>
+          <mt-cell title="持有NFT（个）">
+            <span style="color:gray;">{{ nftList.length }}</span>
+          </mt-cell>
+          <div style="padding: 15px;">
+            <mt-button type="danger" size="large" @click="disconnectWallet">
+              断开钱包
+            </mt-button>
+          </div>
+        </div>
+        <div v-else style="padding: 15px;">
+          <mt-button type="primary" size="large" @click="connectWallet">
+            连接钱包
+          </mt-button>
+        </div>
+    </div>
+  </div>
+  <mt-tabbar v-model="activeTab">
+    <mt-tab-item id="home">
+        <img slot="icon" src="data:image/png;base64,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">
+        主页
+    </mt-tab-item>
+    <mt-tab-item id="me">
+        <img slot="icon" src="data:image/png;base64,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">
+        我的
+    </mt-tab-item>
+  </mt-tabbar>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/vue@2/dist/vue.js"></script>
+<script src="https://unpkg.com/mint-ui/lib/index.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/web3@1.10.0/dist/web3.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/countup.js@2.6.2/dist/countUp.umd.js"></script>
+<script>
+  const contractABI = [{"inputs":[{"internalType":"string","name":"_name","type":"string"},{"internalType":"string","name":"_symbol","type":"string"},{"internalType":"uint256","name":"_maxSupply","type":"uint256"},{"internalType":"uint256","name":"_mintPrice","type":"uint256"},{"internalType":"uint256","name":"_maxPerTx","type":"uint256"},{"internalType":"uint256","name":"_maxPerWallet","type":"uint256"},{"internalType":"string","name":"_unrevealedURI","type":"string"}],"stateMutability":"nonpayable","type":"constructor"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"owner","type":"address"},{"indexed":true,"internalType":"address","name":"approved","type":"address"},{"indexed":true,"internalType":"uint256","name":"tokenId","type":"uint256"}],"name":"Approval","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"owner","type":"address"},{"indexed":true,"internalType":"address","name":"operator","type":"address"},{"indexed":false,"internalType":"bool","name":"approved","type":"bool"}],"name":"ApprovalForAll","type":"event"},{"anonymous":false,"inputs":[{"indexed":false,"internalType":"string","name":"baseURI","type":"string"}],"name":"BaseURISet","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"minter","type":"address"},{"indexed":true,"internalType":"uint256","name":"tokenId","type":"uint256"}],"name":"Minted","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"previousOwner","type":"address"},{"indexed":true,"internalType":"address","name":"newOwner","type":"address"}],"name":"OwnershipTransferred","type":"event"},{"anonymous":false,"inputs":[{"indexed":false,"internalType":"bool","name":"revealed","type":"bool"}],"name":"Revealed","type":"event"},{"anonymous":false,"inputs":[{"indexed":false,"internalType":"bool","name":"active","type":"bool"}],"name":"SaleToggled","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"from","type":"address"},{"indexed":true,"internalType":"address","name":"to","type":"address"},{"indexed":true,"internalType":"uint256","name":"tokenId","type":"uint256"}],"name":"Transfer","type":"event"},{"anonymous":false,"inputs":[{"indexed":false,"internalType":"string","name":"unrevealedURI","type":"string"}],"name":"UnrevealedURISet","type":"event"},{"anonymous":false,"inputs":[{"indexed":false,"internalType":"bool","name":"active","type":"bool"}],"name":"WhitelistToggled","type":"event"},{"inputs":[{"internalType":"address","name":"to","type":"address"},{"internalType":"uint256","name":"tokenId","type":"uint256"}],"name":"approve","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"owner","type":"address"}],"name":"balanceOf","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256","name":"tokenId","type":"uint256"}],"name":"getApproved","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"hide","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"owner","type":"address"},{"internalType":"address","name":"operator","type":"address"}],"name":"isApprovedForAll","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"maxPerTx","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"maxPerWallet","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"maxSupply","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"merkleRoot","outputs":[{"internalType":"bytes32","name":"","type":"bytes32"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"mintPrice","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"","type":"address"}],"name":"mintedPerWallet","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"name","outputs":[{"internalType":"string","name":"","type":"string"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"owner","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"to","type":"address"},{"internalType":"uint256","name":"quantity","type":"uint256"}],"name":"ownerMint","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"uint256","name":"tokenId","type":"uint256"}],"name":"ownerOf","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256","name":"quantity","type":"uint256"}],"name":"publicMint","outputs":[],"stateMutability":"payable","type":"function"},{"inputs":[],"name":"renounceOwnership","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[],"name":"reveal","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[],"name":"revealed","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"from","type":"address"},{"internalType":"address","name":"to","type":"address"},{"internalType":"uint256","name":"tokenId","type":"uint256"}],"name":"safeTransferFrom","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"from","type":"address"},{"internalType":"address","name":"to","type":"address"},{"internalType":"uint256","name":"tokenId","type":"uint256"},{"internalType":"bytes","name":"data","type":"bytes"}],"name":"safeTransferFrom","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[],"name":"saleActive","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"operator","type":"address"},{"internalType":"bool","name":"approved","type":"bool"}],"name":"setApprovalForAll","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"string","name":"_baseURI","type":"string"}],"name":"setBaseURI","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"uint256","name":"_maxPerTx","type":"uint256"}],"name":"setMaxPerTx","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"uint256","name":"_maxPerWallet","type":"uint256"}],"name":"setMaxPerWallet","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"uint256","name":"_maxSupply","type":"uint256"}],"name":"setMaxSupply","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"bytes32","name":"_root","type":"bytes32"}],"name":"setMerkleRoot","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"uint256","name":"_mintPrice","type":"uint256"}],"name":"setMintPrice","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"string","name":"_unrevealedURI","type":"string"}],"name":"setUnrevealedURI","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"bytes4","name":"interfaceId","type":"bytes4"}],"name":"supportsInterface","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"symbol","outputs":[{"internalType":"string","name":"","type":"string"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"toggleSale","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[],"name":"toggleWhitelist","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"uint256","name":"index","type":"uint256"}],"name":"tokenByIndex","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"owner","type":"address"},{"internalType":"uint256","name":"index","type":"uint256"}],"name":"tokenOfOwnerByIndex","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256","name":"tokenId","type":"uint256"}],"name":"tokenURI","outputs":[{"internalType":"string","name":"","type":"string"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"totalSupply","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"from","type":"address"},{"internalType":"address","name":"to","type":"address"},{"internalType":"uint256","name":"tokenId","type":"uint256"}],"name":"transferFrom","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"newOwner","type":"address"}],"name":"transferOwnership","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[],"name":"unrevealedURI","outputs":[{"internalType":"string","name":"","type":"string"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"whitelistActive","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256","name":"quantity","type":"uint256"},{"internalType":"bytes32[]","name":"proof","type":"bytes32[]"}],"name":"whitelistMint","outputs":[],"stateMutability":"payable","type":"function"},{"inputs":[{"internalType":"address payable","name":"to","type":"address"}],"name":"withdraw","outputs":[],"stateMutability":"nonpayable","type":"function"}];
+  const contractAddress = "0xb8cD5FC286922c54AB32A8AaBF583E382b44F050";
+  new Vue({
+    el: '#app',
+    data: {
+      activeTab: 'home',
+      mintQuantity: 1,
+      popupMintNFTVisible: false,
+      stats: [
+        { label: '交易总数', value: 0 },
+        { label: '活跃用户', value: 0 },
+        { label: 'NFT 铸造', value: 0 },
+        { label: '转账次数', value: 0 }
+      ],
+      account: null,
+      balance: null,
+      web3: null,
+      contract: null,
+      es: null,
+      nftList: [],
+      occurred: [],
+    },
+    watch: {
+      activeTab(newVal) {
+        switch (newVal) {
+          case 'home':
+            this.$nextTick(() => {
+              this.stats.forEach(stat => {
+                this.runCountUp(stat.name, stat.value - 1, stat.value)
+              })
+            })
+            break;
+          case 'me':
+            if(!this.nftList.length) {
+              this.loadMyNFTs();
+            }
+            break;
+        }
+      },
+      stats: {
+        deep: true,
+        handler(newStats, oldStats) {
+          let occurredName = this.occurred.pop()
+          this.$nextTick(() => {
+            newStats.forEach((stat, index) => {
+              if (occurredName=== undefined || occurredName === stat.name) {
+                this.runCountUp(stat.name, oldStats[index] ? oldStats[index].value : 0, stat.value);
+              }
+            });
+          });
+        }
+      }
+    },
+    async mounted() {
+      this.flushStat();
+      if (!window.ethereum) {
+        this.$toast('未检测到 MetaMask，请先安装');
+        return
+      }
+      this.web3 = new Web3(window.ethereum);
+      let walletConnected = localStorage.getItem('wallet_connected')
+      if (walletConnected === 'true') {
+        const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+        if (accounts.length) {
+          this.setAccount(accounts[0]);
+        }
+      }
+      window.ethereum.on('accountsChanged', (accounts) => {
+        if (accounts.length) {
+          this.setAccount(accounts[0]);
+        } else {
+          this.account = null;
+          this.balance = null;
+        }
+      });
+      window.ethereum.on('chainChanged', () => {
+        window.location.reload();
+      });
+      
+      this.contract = new this.web3.eth.Contract(contractABI, contractAddress);
+    },
+    methods: {
+      async mintNFT(quantity) {
+        try {
+          const mintPrice = await this.contract.methods.mintPrice().call();
+          const totalPrice = BigInt(mintPrice) * BigInt(quantity); // 总价
+          const tx = await this.contract.methods.publicMint(quantity).send({
+            from: this.account,
+            value: totalPrice.toString()  // wei 单位
+          });
+          this.$toast('铸造成功');
+        } catch (err) {
+          console.error('铸造失败', err);
+          this.$toast('铸造失败');
+        }
+      },
+      flushStat() {
+          if (this.es) {
+            this.es.close();
+            this.es = null;
+          }
+          this.es = new EventSource('/api/sse/occurred')
+          this.es.addEventListener('data', event => {
+              let data = JSON.parse(event.data);
+              switch (data.type) {
+                  case "stats":
+                      this.stats = data.data;
+                      break;
+                  case "occurred":
+                      let occurred = data.data;
+                      for (let i = 0; i < this.stats.length; i++) {
+                          let s = this.stats[i];
+                          if (s.name === occurred.name) {
+                              this.stats[i].value += occurred.value;
+                              this.occurred.push(occurred.name);
+                          }
+                      }
+                      break;
+              }
+          });
+      },
+      loadTop() {
+      this.flushStat()
+        setTimeout(() => {
+          this.$refs.loadmore.onTopLoaded()
+        }, 700)
+      },
+      runCountUp(name, start, end, cb = () => {}) {
+        const options = {
+          startVal: 0,
+          onCompleteCallback: cb,
+          duration: 1,
+        };
+        let cu = new countUp.CountUp('stat-' + name, end, options);
+        if (!cu.error) {
+          cu.start();
+        } else {  
+          console.error(cu.error);
+        }
+      },
+      async connectWallet() {
+        try {
+          const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+          this.setAccount(accounts[0]);
+          localStorage.setItem('wallet_connected', 'true');
+          this.$toast('钱包连接成功！');
+        } catch (err) {
+          console.error(err);
+          this.$toast('连接钱包失败');
+        }
+      },
+      disconnectWallet() {
+        this.account = null;
+        this.balance = '0';
+        localStorage.removeItem('wallet_connected'); 
+        this.$toast('已断开钱包');
+      },
+      async setAccount(account) {
+        this.account = account;
+        const balanceWei = await this.web3.eth.getBalance(account);
+        this.balance = this.web3.utils.fromWei(balanceWei, 'ether');
+      },
+      async loadMyNFTs() {
+        if (!this.contract || !this.account) return;
+        const balance = await this.contract.methods.balanceOf(this.account).call();
+        const list = [];
+        for (let i = 0; i < balance; i++) {
+          const tokenId = await this.contract.methods.tokenOfOwnerByIndex(this.account, i).call();
+          const tokenURI = await this.contract.methods.tokenURI(tokenId).call();
+          list.push({ tokenId, tokenURI });
+        }
+        this.nftList = list;
+      }
+    }
+  });
+</script>
+</body>
+</html>

@@ -37,3 +37,11 @@ type EventParsed struct {
 	Metadata        string    `db:"metadata" json:"metadata"`
 	CreatedAt       time.Time `db:"created_at" json:"created_at"`
 }
+
+type EventStats struct {
+	ID             int64     `db:"id" json:"id"`
+	EventLabel     string    `db:"event_label" json:"event_label"`
+	EventName      string    `db:"event_name" json:"event_name"`
+	EventCount     int       `db:"event_count" json:"event_count"`
+	CreatedAt      time.Time `db:"created_at" json:"created_at"`
+}

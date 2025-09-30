@@ -8,6 +8,7 @@ require (
 	github.com/ethereum/go-ethereum v1.16.3
 	github.com/go-chi/chi/v5 v5.2.2
 	github.com/lib/pq v1.10.9
+	github.com/robfig/cron v1.2.0
 )
 
 require (

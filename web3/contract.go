@@ -18,9 +18,10 @@ import (
 )
 
 var (
-	ethUri       = "wss://sepolia.infura.io/ws/v3/b0daa49c16d7466cbdf68176ba2a243a"
-	nftAddress   = common.HexToAddress("0xb8cD5FC286922c54AB32A8AaBF583E382b44F050")
-	storeAddress = common.HexToAddress("0xfeadcf82070998D19A215C91E19638Bfcd1Ab854")
+	ethUri        = "wss://sepolia.infura.io/ws/v3/b0daa49c16d7466cbdf68176ba2a243a"
+	nftAddress    = common.HexToAddress("0xb8cD5FC286922c54AB32A8AaBF583E382b44F050")
+	storeAddress  = common.HexToAddress("0xfeadcf82070998D19A215C91E19638Bfcd1Ab854")
+	walletAddress = common.HexToAddress("0xe3D3a9a1111872990e0f5a1351D7876162A40Fa6")
 )
 
 type Contract struct {
@@ -29,6 +30,14 @@ type Contract struct {
 	store      *store.Store
 	nft        *nft.Nft
 	client     *ethclient.Client
+}
+
+func (c *Contract) PendingNonceAt(ctx context.Context, address common.Address) (uint64, error) {
+	nonce, err := c.client.PendingNonceAt(ctx, address)
+	if err != nil {
+		return 0, err
+	}
+	return nonce, nil
 }
 
 func (c *Contract) Watch(ctx context.Context) error {
@@ -94,7 +103,7 @@ func (c *Contract) Watch(ctx context.Context) error {
 	return nil
 }
 
-func NewContract(eventBus *cqrs.EventBus, commandBus *cqrs.CommandBus) *Contract {
+func NewContract(routers *Routers) *Contract {
 	c := Contract{}
 	client, err := ethclient.Dial(ethUri)
 	if err != nil {
@@ -108,10 +117,11 @@ func NewContract(eventBus *cqrs.EventBus, commandBus *cqrs.CommandBus) *Contract
 	if err != nil {
 		panic(err)
 	}
+
 	c.nft = nft
 	c.store = store
-	c.eventBus = eventBus
-	c.commandBus = commandBus
+	c.eventBus = routers.EventBus
+	c.commandBus = routers.CommandBus
 	c.client = client
 	return &c
 }

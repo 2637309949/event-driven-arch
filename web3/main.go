@@ -2,26 +2,32 @@ package main
 
 import (
 	"context"
-	stdSQL "database/sql"
+	"database/sql"
 	"fmt"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/ThreeDotsLabs/watermill"
 	_ "github.com/lib/pq"
+	"github.com/robfig/cron"
 )
 
 type Config struct {
 }
 
 var (
-	topic  = "ItemSet"
+	topic  = "EventOccurred"
 	ctx    = context.Background()
 	logger = watermill.NewStdLogger(false, false)
 )
 
 func main() {
+	c := cron.New()
 	config := Config{}
-	db, err := stdSQL.Open("postgres", "postgres://Doubl:@127.0.0.1:5432/testdb?sslmode=disable")
+	db, err := sql.Open("postgres", "postgres://Doubl:@127.0.0.1:5432/testdb?sslmode=disable")
 	if err != nil {
 		panic(err)
 	}
@@ -35,16 +41,33 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	ct := NewContract(routers.EventBus, routers.CommandBus)
+
+	ct := NewContract(routers)
 	err = ct.Watch(ctx)
 	if err != nil {
 		panic(err)
 	}
 
+	t := NewTimed(c, ct, repos, routers.EventBus)
+	t.Start(ctx)
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	mux := NewHandler(repos, routers.EventBus, routers.SSERouter)
 	server := &http.Server{Addr: ":8080", Handler: mux}
-	err = server.ListenAndServe()
-	if err != nil {
-		panic(err)
+	go func() {
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logger.Error("ListenAndServe error", err, watermill.LogFields{})
+		}
+	}()
+	routers.Run(ctx) // 确保注册完事件处理函数
+	logger.Info("Server started at", watermill.LogFields{"port": "8080"})
+	<-quit
+	logger.Info("Shutting down server...", watermill.LogFields{})
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	if err := server.Shutdown(ctx); err != nil {
+		logger.Error("ListenAndServe error", err, watermill.LogFields{})
 	}
+	logger.Info("Server exiting", watermill.LogFields{})
 }

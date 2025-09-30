@@ -56,6 +56,37 @@ type EventLog struct {
 	CreatedAt       time.Time
 }
 
+type EventOccurred struct {
+	EventName string    `json:"event_name"`
+	Occurred  time.Time `json:"occurred"`
+}
+
+func (r *Routers) Run(ctx context.Context) {
+	ctx, _ = signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		err := r.EventsRouter.Run(ctx)
+		if err != nil {
+			panic(err)
+		}
+	}()
+	<-r.EventsRouter.Running()
+
+	go func() {
+		err := r.SSERouter.Run(ctx)
+		if err != nil {
+			panic(err)
+		}
+	}()
+	<-r.SSERouter.Running()
+
+	go func() {
+		<-ctx.Done()
+		if err := r.EventsRouter.Close(); err != nil {
+			log.Println("router close error:", err)
+		}
+	}()
+}
+
 func NewRouters(ctx context.Context, cfg *Config, repo *Repository) (*Routers, error) {
 	ctx, _ = signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	redisClient := redis.NewClient(&redis.Options{Addr: "127.0.0.1:6379"})
@@ -105,14 +136,14 @@ func NewRouters(ctx context.Context, cfg *Config, repo *Repository) (*Routers, e
 		cqrs.NewEventHandler(
 			"ItemSetHandler",
 			func(ctx context.Context, ev *ItemSet) error {
-				fmt.Printf("ItemSet key=%v, value=%v\n", ev.Key, ev.Value)
+				fmt.Printf("ItemSetHandler key=%v, value=%v\n", ev.Key, ev.Value)
 				return nil
 			},
 		),
 		cqrs.NewEventHandler(
 			"EventParsedHandler",
 			func(ctx context.Context, ev *EventLog) error {
-				fmt.Printf("EventParsed EventName=%v, TxHash=%v\n", ev.EventName, ev.TxHash)
+				fmt.Printf("EventParsedHandler EventName=%v, TxHash=%v\n", ev.EventName, ev.TxHash)
 				eventName := ev.EventName
 				switch eventName {
 				case "Revealed":
@@ -162,6 +193,7 @@ func NewRouters(ctx context.Context, cfg *Config, repo *Repository) (*Routers, e
 						ToAddress:       to.Hex(),
 						TokenID:         valueOrTokenId,
 						Value:           valueOrTokenId,
+						Metadata:        `{}`,
 					}
 					err = repo.InsertEventParsed(ctx, &ep)
 					if err != nil {
@@ -197,6 +229,7 @@ func NewRouters(ctx context.Context, cfg *Config, repo *Repository) (*Routers, e
 						ToAddress:       to.Hex(),
 						TokenID:         tokenId,
 						Value:           tokenId,
+						Metadata:        `{}`,
 					}
 					err = repo.InsertEventParsed(ctx, &ep)
 					if err != nil {
@@ -232,9 +265,41 @@ func NewRouters(ctx context.Context, cfg *Config, repo *Repository) (*Routers, e
 			},
 		),
 		cqrs.NewEventHandler(
+			"EventStatsHandler",
+			func(ctx context.Context, ev *EventLog) error {
+				fmt.Printf("EventStatsHandler EventName=%v, TxHash=%v\n", ev.EventName, ev.TxHash)
+				eventName := ev.EventName
+				switch eventName {
+				case "Transfer":
+					ep := EventStats{
+						EventLabel: "转账次数",
+						EventName:  ev.EventName,
+						EventCount: 1,
+					}
+					err = repo.UpsertEventStats(ctx, &ep)
+					if err != nil {
+						log.Println("UpsertEventStats err:", err)
+						return err
+					}
+				case "Minted":
+					ep := EventStats{
+						EventLabel: "NFT 铸造",
+						EventName:  ev.EventName,
+						EventCount: 1,
+					}
+					err = repo.UpsertEventStats(ctx, &ep)
+					if err != nil {
+						log.Println("UpsertEventStats err:", err)
+						return err
+					}
+				}
+				return nil
+			},
+		),
+		cqrs.NewEventHandler(
 			"EventRawHandler",
 			func(ctx context.Context, ev *EventLog) error {
-				fmt.Printf("EventRaw EventName=%v, TxHash=%v\n", ev.EventName, ev.TxHash)
+				fmt.Printf("EventRawHandler EventName=%v, TxHash=%v\n", ev.EventName, ev.TxHash)
 				er := EventRaw{
 					TxHash:          ev.TxHash,
 					LogIndex:        ev.LogIndex,
@@ -253,6 +318,22 @@ func NewRouters(ctx context.Context, cfg *Config, repo *Repository) (*Routers, e
 				err := repo.InsertEventRaw(ctx, &er)
 				if err != nil {
 					log.Println("InsertEventRaw err:", err)
+					return err
+				}
+				return nil
+			},
+		),
+		cqrs.NewEventHandler(
+			"EventOccurredHandler",
+			func(ctx context.Context, ev *EventLog) error {
+				fmt.Printf("EventOccurredHandler EventName=%v, TxHash=%v\n", ev.EventName, ev.TxHash)
+				er := EventOccurred{
+					EventName: ev.EventName,
+					Occurred:  ev.CreatedAt,
+				}
+				err := eventBus.Publish(ctx, &er)
+				if err != nil {
+					log.Println("eventBus.Publish err:", err)
 					return err
 				}
 				return nil
@@ -306,29 +387,6 @@ func NewRouters(ctx context.Context, cfg *Config, repo *Repository) (*Routers, e
 	if err != nil {
 		return nil, err
 	}
-
-	go func() {
-		err := router.Run(ctx)
-		if err != nil {
-			panic(err)
-		}
-	}()
-	<-router.Running()
-
-	go func() {
-		err := sseRouter.Run(ctx)
-		if err != nil {
-			panic(err)
-		}
-	}()
-	<-sseRouter.Running()
-
-	go func() {
-		<-ctx.Done()
-		if err := router.Close(); err != nil {
-			log.Println("router close error:", err)
-		}
-	}()
 
 	routers.SSERouter = sseRouter
 	routers.EventsRouter = router
