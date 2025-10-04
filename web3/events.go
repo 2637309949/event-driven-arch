@@ -89,7 +89,7 @@ func (r *Routers) Run(ctx context.Context) {
 
 func NewRouters(ctx context.Context, cfg *Config, repo *Repository) (*Routers, error) {
 	ctx, _ = signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
-	redisClient := redis.NewClient(&redis.Options{Addr: "127.0.0.1:6379"})
+	redisClient := redis.NewClient(&redis.Options{Addr: redisAddr})
 	marshaler := cqrs.JSONMarshaler{GenerateName: cqrs.StructName}
 	routers := Routers{}
 	router, err := message.NewRouter(message.RouterConfig{}, logger)

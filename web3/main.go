@@ -22,12 +22,14 @@ var (
 	topic  = "EventOccurred"
 	ctx    = context.Background()
 	logger = watermill.NewStdLogger(false, false)
+	redisAddr = "127.0.0.1:6379"
+	dbUri  = "postgres://:@127.0.0.1:5432/web3?sslmode=disable"
 )
 
 func main() {
 	c := cron.New()
 	config := Config{}
-	db, err := sql.Open("postgres", "postgres://Doubl:@127.0.0.1:5432/web3?sslmode=disable")
+	db, err := sql.Open("postgres", dbUri)
 	if err != nil {
 		panic(err)
 	}
