@@ -99,6 +99,20 @@
             <mt-cell title="持有NFT（个）">
               <span style="color:gray;">{{ nftList.length }}</span>
             </mt-cell>
+            <div class="card-wrapper" v-if="nftList.length">
+              <h3>最近铸造的 NFT</h3>
+              <div class="stats-grid">
+                <div class="stat-card" v-for="(nft, index) in nftList" :key="nft.tokenId">
+                  <img :src="nft.imageURL" alt="NFT Image" style="width:100%; border-radius:8px;" />
+                  <div style="margin-top:5px;">
+                    <strong>Token ID:</strong> {{ nft.tokenId }}
+                  </div>
+                  <div v-if="nft.name">
+                    <strong>Name:</strong> {{ nft.name }}
+                  </div>
+                </div>
+              </div>
+            </div>
             <div style="padding: 15px;">
               <mt-button type="danger" size="large" @click="disconnectWallet">
                 断开钱包
@@ -284,6 +298,7 @@
         try {
           const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
           this.setAccount(accounts[0]);
+          this.loadMyNFTs();
           localStorage.setItem('wallet_connected', 'true');
           this.$toast('钱包连接成功！');
         } catch (err) {
@@ -294,6 +309,7 @@
       disconnectWallet() {
         this.account = null;
         this.balance = '0';
+        this.nftList = [];
         localStorage.removeItem('wallet_connected'); 
         this.$toast('已断开钱包');
       },
@@ -308,10 +324,30 @@
         const list = [];
         for (let i = 0; i < balance; i++) {
           const tokenId = await this.contract.methods.tokenOfOwnerByIndex(this.account, i).call();
-          const tokenURI = await this.contract.methods.tokenURI(tokenId).call();
-          list.push({ tokenId, tokenURI });
+          let tokenURI = await this.contract.methods.tokenURI(tokenId).call();
+          tokenURI = `${tokenURI}.json`;
+          if (tokenURI.startsWith("ipfs://")) {
+            tokenURI = tokenURI.replace("ipfs://", "https://ipfs.io/ipfs/");
+          }
+          // fetch JSON metadata
+          let metadata = {};
+          try {
+            const res = await fetch(tokenURI);
+            metadata = await res.json();
+          } catch(e) {
+            console.error("获取 NFT metadata 失败", e);
+          }
+          // image URL
+          let imageURL = "";
+          if (metadata.image) {
+            imageURL = metadata.image.startsWith("ipfs://") 
+              ? metadata.image.replace("ipfs://", "https://ipfs.io/ipfs/") 
+              : metadata.image;
+          }
+          // 倒序显示最近铸造的
+          // this.nftList.unshift({ tokenId, tokenURI, name: metadata.name, imageURL });
+          this.nftList.push({ tokenId, tokenURI, name: metadata.name, imageURL });
         }
-        this.nftList = list;
       }
     }
   });
