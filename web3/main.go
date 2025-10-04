@@ -27,7 +27,7 @@ var (
 func main() {
 	c := cron.New()
 	config := Config{}
-	db, err := sql.Open("postgres", "postgres://Doubl:@127.0.0.1:5432/testdb?sslmode=disable")
+	db, err := sql.Open("postgres", "postgres://Doubl:@127.0.0.1:5432/web3?sslmode=disable")
 	if err != nil {
 		panic(err)
 	}

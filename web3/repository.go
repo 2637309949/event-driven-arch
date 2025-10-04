@@ -26,7 +26,6 @@ ALTER TABLE event_raw ADD CONSTRAINT uq_raw_tx_log UNIQUE (tx_hash, log_index);
 CREATE INDEX idx_event_block_number ON event_raw(block_number);
 CREATE INDEX idx_event_contract_name ON event_raw(contract_address, event_name);
 CREATE INDEX idx_event_topic0 ON event_raw(topic0);
-CREATE INDEX idx_event_data_jsonb ON event_raw USING GIN (data);
 CREATE TABLE IF NOT EXISTS event_parsed (
     id                BIGSERIAL PRIMARY KEY,
     tx_hash           CHAR(66) NOT NULL,
