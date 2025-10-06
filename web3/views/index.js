@@ -269,7 +269,8 @@ new Vue({
                     this.contract.methods.totalSupply().call(),
                     this.contract.methods.maxSupply().call()
                 ]);
-                this.totalSupply = parseInt(supply);
+                this.totalSupply = 0;
+                this.$nextTick(() => this.totalSupply = parseInt(supply));
                 this.maxSupply = parseInt(max);
             } catch (err) {
                 console.error("读取合约数据失败:", err);
