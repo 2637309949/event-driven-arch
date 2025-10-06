@@ -41,6 +41,41 @@
       color: #409EFF;
       margin-top: 5px;
     }
+    .meta-popup {
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .mint-progress-container {
+      margin: 20px auto;
+      padding: 15px;
+      width: 90%;
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+    .progress-title {
+      font-size: 14px;
+      color: #666;
+      margin-bottom: 8px;
+    }
+    .progress-bar-bg {
+      width: 100%;
+      height: 10px;
+      border-radius: 5px;
+      background: #eee;
+      overflow: hidden;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #4caf50, #2196f3);
+      transition: width 0.6s ease;
+    }
+    .progress-text {
+      text-align: right;
+      font-size: 13px;
+      margin-top: 5px;
+      color: #333;
+    }
   </style>
 </head>
 <body>
@@ -50,6 +85,18 @@
       <mt-loadmore :top-method="loadTop" :auto-fill="true" ref="loadmore" style="height:100%;">
         <div>
           <h2>首页</h2>
+          <!-- 铸造进度条模块 -->
+          <div class="mint-progress-container">
+            <h4 class="progress-title">铸造进度</h4>
+            <div class="progress-bar-bg">
+              <div class="progress-bar-fill" :style="{ width: progressPercent + '%' }"></div>
+            </div>
+            <div class="progress-text">
+              <span class="stat-totalSupply" id="stat-totalSupply">100</span>/
+              <span class="stat-maxSupply" id="stat-maxSupply">1000</span>
+            </div>
+          </div>
+          <!-- 铸造统计模块 -->
           <div class="stats-grid">
             <div class="stat-card" v-for="(item, index) in stats" :key="index">
               <div class="stat-label">{{ item.label }}</div>
@@ -85,7 +132,7 @@
         </div>
       </mt-loadmore>
     </div>
-    <div v-if="activeTab === 'me'" style="height:100%;">
+    <div v-if="activeTab === 'me'">
       <mt-loadmore :top-method="meLoadTop" :auto-fill="true" ref="meLoadmore" style="height:100%;">
         <div>
           <h2>我的</h2>
@@ -102,15 +149,28 @@
             <div class="card-wrapper" v-if="nftList.length">
               <h3>最近铸造的 NFT</h3>
               <div class="stats-grid">
-                <div class="stat-card" v-for="(nft, index) in nftList" :key="nft.tokenId">
+                <div class="stat-card" v-for="(nft, index) in nftList" :key="nft.tokenId" @click="showMeta(nft.tokenId)">
                   <img :src="nft.imageURL" alt="NFT Image" style="width:100%; border-radius:8px;" />
                   <div style="margin-top:5px;">
-                    <strong>Token ID:</strong> {{ nft.tokenId }}
-                  </div>
-                  <div v-if="nft.name">
-                    <strong>Name:</strong> {{ nft.name }}
+                    <strong>#{{ nft.tokenId }}</strong> 
                   </div>
                 </div>
+                <!-- NFT Metadata 弹窗 -->
+                <mt-popup v-model="metaVisible" position="center" class="meta-popup">
+                  <div v-if="metaData" style="padding:20px; max-width:400px;width: 80vw;">
+                    <h3 style="margin-bottom:10px;">{{ metaData.name }}</h3>
+                    <img :src="metaData.imageURL" style="width:100%; border-radius:10px; margin-bottom:10px;"/>
+                    <p v-if="metaData.description" style="margin-bottom:10px; color:#555;">{{ metaData.description }}</p>
+                    <div v-if="metaData.attributes && metaData.attributes.length">
+                      <div v-for="(attr, i) in metaData.attributes" :key="i" style="background:#f6f6f6; padding:8px; border-radius:6px; margin-bottom:6px;">
+                        <strong>{{ attr.trait_type }}:</strong> {{ attr.value }}
+                      </div>
+                    </div>
+                    <mt-button size="large" type="primary" style="margin-top:10px;" @click="metaVisible = false">
+                      关闭
+                    </mt-button>
+                  </div>
+                </mt-popup>
               </div>
             </div>
             <div style="padding: 15px;">
@@ -130,11 +190,11 @@
   </div>
   <mt-tabbar v-model="activeTab">
     <mt-tab-item id="home">
-        <i slot="icon" class="fas fa-home"></i>
+        <i slot="icon"class="fas fa-house" style='color:gray'></i>
         <span>首页</span>
     </mt-tab-item>
     <mt-tab-item id="me">
-        <i slot="icon" class="fas fa-user"></i>
+        <i slot="icon" class="fas fa-user" style='color:gray'></i>
         <span>我的</span>
     </mt-tab-item>
   </mt-tabbar>
@@ -150,6 +210,10 @@
   new Vue({
     el: '#app',
     data: {
+      totalSupply: 0, 
+      maxSupply: 1000,
+      metaVisible: false,
+      metaData: null,
       activeTab: 'home',
       mintQuantity: 1,
       mintLoading: false, 
@@ -168,6 +232,13 @@
       nftList: [],
       occurred: [],
     },
+    computed: {
+      progressPercent() {
+        if (!this.maxSupply) return 0
+        const percent = (this.totalSupply / this.maxSupply) * 100
+        return percent.toFixed(2)
+      }
+    },
     watch: {
       activeTab(newVal) {
         switch (newVal) {
@@ -175,7 +246,9 @@
             this.$nextTick(() => {
               this.stats.forEach(stat => {
                 this.runCountUp(stat.name, stat.value - 1, stat.value)
-              })
+              });
+              this.runCountUp('totalSupply', this.totalSupply - 1, this.totalSupply);
+              this.runCountUp('maxSupply', this.maxSupply - 1, this.maxSupply);
             })
             break;
           case 'me':
@@ -184,6 +257,16 @@
             }
             break;
         }
+      },
+      totalSupply(newVal) {
+        this.$nextTick(() => {
+          this.runCountUp('totalSupply', newVal - 1, newVal);
+        })
+      },
+      maxSupply(newVal) {
+        this.$nextTick(() => {
+          this.runCountUp('maxSupply', newVal - 1, newVal);
+        })
       },
       stats: {
         deep: true,
@@ -198,6 +281,12 @@
           });
         }
       }
+    },
+    beforeDestroy(){
+        if (this.es) {
+          this.es.close();
+          this.es = null;
+        }
     },
     async mounted() {
       this.flushStat();
@@ -226,6 +315,7 @@
       });
       
       this.contract = new this.web3.eth.Contract(contractABI, contractAddress);
+      this.refreshProgressPercent();
     },
     methods: {
       async mintNFT(quantity) {
@@ -239,8 +329,8 @@
           });
           this.$toast('铸造成功');
         } catch (err) {
-          console.error('铸造失败', err);
-          this.$toast('铸造失败');
+          console.error('publicMint err', err);
+          this.$toast(err.message.includes('insufficient funds') ? '余额不足' : '铸造失败');
         } finally {
           this.mintLoading = false;
         }
@@ -265,13 +355,17 @@
                               this.stats[i].value += occurred.value;
                               this.occurred.push(occurred.name);
                           }
+                          if (occurred.name=='Minted') {
+                            this.totalSupply += 1
+                          }
                       }
                       break;
               }
           });
       },
       loadTop() {
-        this.flushStat()
+        this.flushStat();
+        this.refreshProgressPercent();
         setTimeout(() => {
           this.$refs.loadmore.onTopLoaded()
         }, 700)
@@ -318,6 +412,33 @@
         const balanceWei = await this.web3.eth.getBalance(account);
         this.balance = this.web3.utils.fromWei(balanceWei, 'ether');
       },
+      async showMeta(tokenId) {
+        try {
+          if (!this.contract || !this.account) return;
+          const balance = await this.contract.methods.balanceOf(this.account).call();
+          let tokenURI = await this.contract.methods.tokenURI(tokenId).call();
+          if (!tokenURI.endsWith('.json')) tokenURI += '.json';
+          if (tokenURI.startsWith("ipfs://")) {
+            tokenURI = tokenURI.replace("ipfs://", "https://ipfs.io/ipfs/");
+          }
+          const res = await fetch(tokenURI)
+          const meta = await res.json()
+
+          // image URL
+          let imageURL = "";
+          if (meta.image) {
+            imageURL = meta.image.startsWith("ipfs://") 
+              ? meta.image.replace("ipfs://", "https://ipfs.io/ipfs/") 
+              : meta.image;
+          }
+          meta.imageURL = imageURL
+
+          this.metaData = meta
+          this.metaVisible = true
+        } catch (err) {
+          this.$toast(`加载 Metadata 失败: ${err}`)
+        }
+      },
       async loadMyNFTs() {
         if (!this.contract || !this.account) return;
         const balance = await this.contract.methods.balanceOf(this.account).call();
@@ -325,7 +446,7 @@
         for (let i = 0; i < balance; i++) {
           const tokenId = await this.contract.methods.tokenOfOwnerByIndex(this.account, i).call();
           let tokenURI = await this.contract.methods.tokenURI(tokenId).call();
-          tokenURI = `${tokenURI}.json`;
+          if (!tokenURI.endsWith('.json')) tokenURI += '.json';
           if (tokenURI.startsWith("ipfs://")) {
             tokenURI = tokenURI.replace("ipfs://", "https://ipfs.io/ipfs/");
           }
@@ -347,6 +468,19 @@
           // 倒序显示最近铸造的
           // this.nftList.unshift({ tokenId, tokenURI, name: metadata.name, imageURL });
           this.nftList.push({ tokenId, tokenURI, name: metadata.name, imageURL });
+        }
+      },
+      async refreshProgressPercent() {
+        try {
+          if (!this.contract || !this.account) return;
+          const [supply, max] = await Promise.all([
+            this.contract.methods.totalSupply().call(),
+            this.contract.methods.maxSupply().call()
+          ]);
+          this.totalSupply = parseInt(supply);
+          this.maxSupply = parseInt(max);
+        } catch (err) {
+          console.error("读取合约数据失败:", err);
         }
       }
     }
