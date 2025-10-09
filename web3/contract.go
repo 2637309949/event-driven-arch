@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log"
+	"math/big"
 	"strings"
 	"time"
 	"web3/contract/defi"
@@ -35,14 +36,71 @@ type Contract struct {
 	client     *ethclient.Client
 }
 
-func (c *Contract) PendingNonceAt(ctx context.Context, address common.Address) (uint64, error) {
-	nonce, err := c.client.PendingNonceAt(ctx, address)
+// 二分法定位区块高度
+func (c *Contract) GetBlockByTime(ctx context.Context, targetTime int64) (uint64, error) {
+	latest, err := c.client.BlockByNumber(ctx, nil)
 	if err != nil {
 		return 0, err
 	}
-	return nonce, nil
+
+	low := uint64(0)
+	high := latest.NumberU64()
+	var blockNum uint64
+
+	for low <= high {
+		mid := (low + high) / 2
+		block, err := c.client.BlockByNumber(ctx, big.NewInt(int64(mid)))
+		if err != nil {
+			return 0, err
+		}
+
+		if int64(block.Time()) < targetTime {
+			low = mid + 1
+		} else {
+			blockNum = mid
+			if mid == 0 {
+				break
+			}
+			high = mid - 1
+		}
+	}
+	return blockNum, nil
 }
 
+// 查询时间段内指定合约事件日志
+func (c *Contract) FilterLogsByTime(ctx context.Context, contractAddr common.Address, startTime, endTime int64) ([]types.Log, error) {
+	var startBlock, endBlock *big.Int
+	var err error
+
+	if startTime != 0 {
+		b, err := c.GetBlockByTime(ctx, startTime)
+		if err != nil {
+			return nil, err
+		}
+		startBlock = big.NewInt(int64(b))
+	}
+	if endTime != 0 {
+		b, err := c.GetBlockByTime(ctx, endTime)
+		if err != nil {
+			return nil, err
+		}
+		endBlock = big.NewInt(int64(b))
+	}
+
+	query := ethereum.FilterQuery{
+		FromBlock: startBlock,
+		ToBlock:   endBlock,
+		Addresses: []common.Address{contractAddr},
+	}
+
+	logs, err := c.client.FilterLogs(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	return logs, nil
+}
+
+// 实时监控
 func (c *Contract) Watch(ctx context.Context) error {
 	// ──────────────── 1. NFT 事件监听 ────────────────
 	nftCh := make(chan types.Log)
@@ -75,35 +133,11 @@ func (c *Contract) Watch(ctx context.Context) error {
 			case err := <-nftSub.Err():
 				log.Fatal(err)
 			case nc := <-nftCh:
-				event, err := nftAbi.EventByID(nc.Topics[0])
+				ev, err := c.ParseEventLog(ctx, nftAbi, nc)
 				if err != nil {
 					log.Println("Unknown event:", nc.Topics[0].Hex())
 					continue
 				}
-				eventName := event.Name
-				ev := EventLog{
-					TxHash:          nc.TxHash.Hex(),
-					LogIndex:        int(nc.Index),
-					BlockNumber:     int64(nc.BlockNumber),
-					BlockTime:       time.Now(), // 建议通过区块时间获取并填充
-					ContractAddress: nc.Address.Hex(),
-					EventSignature:  nc.Topics[0].Hex(),
-					EventName:       eventName,
-					CreatedAt:       time.Now(),
-				}
-				if len(nc.Topics) > 0 {
-					ev.Topic0 = nc.Topics[0].Hex()
-				}
-				if len(nc.Topics) > 1 {
-					ev.Topic1 = nc.Topics[1].Hex()
-				}
-				if len(nc.Topics) > 2 {
-					ev.Topic2 = nc.Topics[2].Hex()
-				}
-				if len(nc.Topics) > 3 {
-					ev.Topic3 = nc.Topics[3].Hex()
-				}
-				ev.Data = nc.Data
 				c.eventBus.Publish(ctx, ev)
 			/// ---- Aave 事件 ----
 			case err := <-aaveSub.Err():
@@ -128,6 +162,48 @@ func (c *Contract) Watch(ctx context.Context) error {
 		}
 	}()
 	return nil
+}
+
+// 解析日志
+func (c *Contract) ParseEventLog(ctx context.Context, abi abi.ABI, nc types.Log) (EventLog, error) {
+	ev := EventLog{}
+	event, err := abi.EventByID(nc.Topics[0])
+	if err != nil {
+		log.Println("Unknown event:", nc.Topics[0].Hex())
+		return ev, err
+	}
+	eventName := event.Name
+	ev.TxHash = nc.TxHash.Hex()
+	ev.LogIndex = int(nc.Index)
+	ev.BlockNumber = int64(nc.BlockNumber)
+	ev.BlockTime = time.Now() // 建议通过区块时间获取并填充
+	ev.ContractAddress = nc.Address.Hex()
+	ev.EventSignature = nc.Topics[0].Hex()
+	ev.EventName = eventName
+	ev.CreatedAt = time.Now()
+	if len(nc.Topics) > 0 {
+		ev.Topic0 = nc.Topics[0].Hex()
+	}
+	if len(nc.Topics) > 1 {
+		ev.Topic1 = nc.Topics[1].Hex()
+	}
+	if len(nc.Topics) > 2 {
+		ev.Topic2 = nc.Topics[2].Hex()
+	}
+	if len(nc.Topics) > 3 {
+		ev.Topic3 = nc.Topics[3].Hex()
+	}
+	ev.Data = nc.Data
+	return ev, nil
+}
+
+// 查找交易Nonce
+func (c *Contract) PendingNonceAt(ctx context.Context, address common.Address) (uint64, error) {
+	nonce, err := c.client.PendingNonceAt(ctx, address)
+	if err != nil {
+		return 0, err
+	}
+	return nonce, nil
 }
 
 func NewContract(routers *Routers) *Contract {

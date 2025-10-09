@@ -31,7 +31,7 @@ func (t *Timed) TimedFlushTest() {
 }
 
 func (t *Timed) TimedFlushStat() {
-	// 刷新交易总数
+	/// 刷新交易总数
 	nonce, err := t.contract.PendingNonceAt(ctx, walletAddress)
 	if err != nil {
 		fmt.Println(err)
@@ -46,7 +46,7 @@ func (t *Timed) TimedFlushStat() {
 		fmt.Println(err)
 		return
 	}
-	//刷新活跃用户
+	/// 刷新活跃用户
 	au, err := t.repo.QueryActiveUsers(ctx)
 	if err != nil {
 		fmt.Println(err)
@@ -65,7 +65,7 @@ func (t *Timed) TimedFlushStat() {
 }
 
 func (t *Timed) Start(ctx context.Context) {
-	// t.cr.AddFunc("0/2 * * * * ?", t.TimedFlushTest)  // 每2秒钟刷新一次
+	/// t.cr.AddFunc("0/2 * * * * ?", t.TimedFlushTest)  // 每2秒钟刷新一次
 	t.cr.AddFunc("0 0/10 * * * ?", t.TimedFlushStat) // 每10分钟刷新一次stat
 	go t.cr.Start()
 }
