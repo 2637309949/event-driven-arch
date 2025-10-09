@@ -5,6 +5,7 @@ import (
 	"log"
 	"strings"
 	"time"
+	"web3/contract/defi"
 	"web3/contract/nft"
 	"web3/contract/store"
 
@@ -19,6 +20,7 @@ import (
 
 var (
 	ethUri        = "wss://sepolia.infura.io/ws/v3/b0daa49c16d7466cbdf68176ba2a243a"
+	aaveAddress   = common.HexToAddress("0x316B1198D72c782Dd44440fCfB6d03Fc98b5c160")
 	nftAddress    = common.HexToAddress("0xb8cD5FC286922c54AB32A8AaBF583E382b44F050")
 	storeAddress  = common.HexToAddress("0xfeadcf82070998D19A215C91E19638Bfcd1Ab854")
 	walletAddress = common.HexToAddress("0xe3D3a9a1111872990e0f5a1351D7876162A40Fa6")
@@ -29,6 +31,7 @@ type Contract struct {
 	commandBus *cqrs.CommandBus
 	store      *store.Store
 	nft        *nft.Nft
+	aave       *defi.Defi
 	client     *ethclient.Client
 }
 
@@ -41,26 +44,38 @@ func (c *Contract) PendingNonceAt(ctx context.Context, address common.Address) (
 }
 
 func (c *Contract) Watch(ctx context.Context) error {
+	// ──────────────── 1. NFT 事件监听 ────────────────
 	nftCh := make(chan types.Log)
-	contractAbi, _ := abi.JSON(strings.NewReader(nft.NftABI))
+	nftAbi, _ := abi.JSON(strings.NewReader(nft.NftABI))
 	nftSub, err := c.client.SubscribeFilterLogs(ctx, ethereum.FilterQuery{
 		Addresses: []common.Address{nftAddress},
 	}, nftCh)
 	if err != nil {
 		return err
 	}
+	// ──────────────── 2. Store 事件监听 ────────────────
 	itemSetChan := make(chan *store.StoreItemSet)
 	isSub, err := c.store.WatchItemSet(&bind.WatchOpts{Context: ctx}, itemSetChan)
+	if err != nil {
+		return err
+	}
+	// ──────────────── 3. Aave 事件监听（新增）───────────────
+	aaveCh := make(chan types.Log)
+	aaveAbi, _ := abi.JSON(strings.NewReader(defi.DefiABI))
+	aaveSub, err := c.client.SubscribeFilterLogs(ctx, ethereum.FilterQuery{
+		Addresses: []common.Address{aaveAddress},
+	}, aaveCh)
 	if err != nil {
 		return err
 	}
 	go func() {
 		for {
 			select {
+			/// ---- NFT 事件 ----
 			case err := <-nftSub.Err():
 				log.Fatal(err)
 			case nc := <-nftCh:
-				event, err := contractAbi.EventByID(nc.Topics[0])
+				event, err := nftAbi.EventByID(nc.Topics[0])
 				if err != nil {
 					log.Println("Unknown event:", nc.Topics[0].Hex())
 					continue
@@ -90,6 +105,18 @@ func (c *Contract) Watch(ctx context.Context) error {
 				}
 				ev.Data = nc.Data
 				c.eventBus.Publish(ctx, ev)
+			/// ---- Aave 事件 ----
+			case err := <-aaveSub.Err():
+				log.Fatal("aaveSub err:", err)
+			case ac := <-aaveCh:
+				event, err := aaveAbi.EventByID(ac.Topics[0])
+				if err != nil {
+					log.Println("Unknown Aave event:", ac.Topics[0].Hex())
+					continue
+				}
+				eventName := event.Name
+				log.Println("Aave event:", eventName)
+			/// ---- Store 事件 ----
 			case ev := <-itemSetChan:
 				cmd := ItemSetCommand{}
 				cmd.Key = ev.Key
@@ -117,7 +144,11 @@ func NewContract(routers *Routers) *Contract {
 	if err != nil {
 		panic(err)
 	}
-
+	aave, err := defi.NewDefi(aaveAddress, client)
+	if err != nil {
+		panic(err)
+	}
+	c.aave = aave
 	c.nft = nft
 	c.store = store
 	c.eventBus = routers.EventBus

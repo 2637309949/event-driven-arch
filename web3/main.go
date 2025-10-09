@@ -19,11 +19,11 @@ type Config struct {
 }
 
 var (
-	topic  = "EventOccurred"
-	ctx    = context.Background()
-	logger = watermill.NewStdLogger(false, false)
+	topic     = "EventOccurred"
+	ctx       = context.Background()
+	logger    = watermill.NewStdLogger(false, false)
 	redisAddr = "127.0.0.1:6379"
-	dbUri  = "postgres://:@127.0.0.1:5432/web3?sslmode=disable"
+	dbUri     = "postgres://:@127.0.0.1:5432/web3?sslmode=disable"
 )
 
 func main() {

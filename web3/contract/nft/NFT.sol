@@ -12,11 +12,11 @@ pragma solidity ^0.8.0;
  Note: 在生产部署前请审计并根据需要开启/加入版税 (ERC2981)、gas 优化等。
 */
 
-import "../openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
-import "../openzeppelin/contracts/access/Ownable.sol";
-import "../openzeppelin/contracts/security/ReentrancyGuard.sol";
-import "../openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
-import "../openzeppelin/contracts/utils/Strings.sol";
+import "../external/openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
+import "../external/openzeppelin/contracts/access/Ownable.sol";
+import "../external/openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "../external/openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
+import "../external/openzeppelin/contracts/utils/Strings.sol";
 
 contract NFT is ERC721Enumerable, Ownable, ReentrancyGuard {
     using Strings for uint256;
