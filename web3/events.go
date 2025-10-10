@@ -33,13 +33,6 @@ type ItemSet struct {
 	Value string
 }
 
-type Routers struct {
-	EventsRouter *message.Router
-	EventBus     *cqrs.EventBus
-	CommandBus   *cqrs.CommandBus
-	SSERouter    http.SSERouter
-}
-
 type EventLog struct {
 	TxHash          string
 	LogIndex        int
@@ -59,6 +52,13 @@ type EventLog struct {
 type EventOccurred struct {
 	EventName string    `json:"event_name"`
 	Occurred  time.Time `json:"occurred"`
+}
+
+type Routers struct {
+	EventsRouter *message.Router
+	EventBus     *cqrs.EventBus
+	CommandBus   *cqrs.CommandBus
+	SSERouter    http.SSERouter
 }
 
 func (r *Routers) Run(ctx context.Context) {
@@ -91,7 +91,6 @@ func NewRouters(ctx context.Context, cfg *Config, repo *Repository) (*Routers, e
 	ctx, _ = signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	redisClient := redis.NewClient(&redis.Options{Addr: redisAddr})
 	marshaler := cqrs.JSONMarshaler{GenerateName: cqrs.StructName}
-	routers := Routers{}
 	router, err := message.NewRouter(message.RouterConfig{}, logger)
 	if err != nil {
 		return nil, err
@@ -387,7 +386,7 @@ func NewRouters(ctx context.Context, cfg *Config, repo *Repository) (*Routers, e
 	if err != nil {
 		return nil, err
 	}
-
+	routers := Routers{}
 	routers.SSERouter = sseRouter
 	routers.EventsRouter = router
 	routers.EventBus = eventBus

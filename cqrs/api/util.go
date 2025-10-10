@@ -1,30 +1,25 @@
 package main
 
 import (
-	"github.com/ThreeDotsLabs/watermill"
-	"github.com/gin-gonic/gin"
+	"encoding/json"
+	"io"
+	"time"
 )
 
-func mustNew(r interface{}, err error) interface{} {
+var (
+	sf    *Snowflake
+	epoch = time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC).UnixNano() / int64(time.Millisecond) // 例：epoch 设为 2020-01-01 00:00:00 UTC 的毫秒数
+)
+
+func init() {
+	s, err := NewSnowflake(2, epoch)
 	if err != nil {
 		panic(err)
 	}
-	return r
+	sf = s
 }
-
-func mustCall(err error) {
-	if err != nil {
-		panic(err)
-	}
-}
-
-func mustRoutine(fn func() error) {
-	go func() {
-		err := fn()
-		if err != nil {
-			panic(err)
-		}
-	}()
+func NextID() int64 {
+	return sf.NextID()
 }
 
 func newFakePlaceOrderCommand(userId int64) PlaceOrderCommand {
@@ -33,10 +28,14 @@ func newFakePlaceOrderCommand(userId int64) PlaceOrderCommand {
 	}
 }
 
-func requestIDMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		requestID := watermill.NewUUID()
-		c.Set("request_id", requestID)
-		c.Next()
+func Decode(r io.Reader, v interface{}) error {
+	err := json.NewDecoder(r).Decode(v)
+	if err != nil {
+		return err
 	}
+	return nil
+}
+
+func Encode(w io.Writer, v interface{}) error {
+	return json.NewEncoder(w).Encode(v)
 }
