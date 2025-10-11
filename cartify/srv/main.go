@@ -21,7 +21,7 @@ var (
 
 func main() {
 	config := Config{}
-	db, err := stdSQL.Open("postgres", "postgres://Doubl:@127.0.0.1:5432/testdb?sslmode=disable")
+	db, err := stdSQL.Open("postgres", "postgres://:@127.0.0.1:5432/testdb?sslmode=disable")
 	if err != nil {
 		panic(err)
 	}
