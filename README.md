@@ -8,7 +8,7 @@
 - **负载平滑**：事件流天然将负载分散，使计算资源充分利用。  
 - **事件溯源**：记录完整业务变化轨迹，为调试、审计、分析提供便利。  
 
-### 企业案列
+### 案列演示
 <p align="left">
   <img src="./cartify/cartify.gif" width="300">
   <img src="./web3/web3.gif" width="300">
