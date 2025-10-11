@@ -4,7 +4,11 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
 
 	"github.com/ThreeDotsLabs/watermill"
@@ -21,16 +25,51 @@ func NewHandler(repo *Repository, commandBus *cqrs.CommandBus, sseRouter watermi
 	r.Handle("/*", http.FileServer(http.Dir("./views")))
 	r.Route("/api", func(r chi.Router) {
 		r.Get("/trx/{id}", sseHandler)
-		r.Post("/order", func(w http.ResponseWriter, r *http.Request) {
-			var placeOrderCommand PlaceOrderCommand
-			err := Decode(r.Body, &placeOrderCommand)
-			if err != nil {
-				http.Error(w, "invalid request body", http.StatusBadRequest)
+		r.Post("/upload", func(w http.ResponseWriter, r *http.Request) {
+			// 限制上传大小（例如 50MB）
+			r.Body = http.MaxBytesReader(w, r.Body, 50<<20)
+			// 解析 multipart/form-data
+			if err := r.ParseMultipartForm(50 << 20); err != nil {
+				http.Error(w, "无法解析上传内容", http.StatusBadRequest)
 				return
 			}
-			placeOrderCommand = newFakePlaceOrderCommand(placeOrderCommand.UserId)
-			placeOrderCommand.TrxId = NextID()
-			err = commandBus.Send(ctx, placeOrderCommand)
+			// 读取上传的文件
+			file, header, err := r.FormFile("file")
+			if err != nil {
+				http.Error(w, "未找到文件字段", http.StatusBadRequest)
+				return
+			}
+			defer file.Close()
+
+			// 提取原始文件名与类型
+			origName := header.Filename
+			ext := filepath.Ext(origName)
+			mimeType := DetectFileType(header)
+
+			// 生成新文件名
+			newName := fmt.Sprintf("%v%v", NextID(), ext)
+			savePath := filepath.Join("upload", newName)
+
+			// 确保目录存在
+			os.MkdirAll("upload", 0755)
+
+			// 保存文件
+			dst, err := os.Create(savePath)
+			if err != nil {
+				http.Error(w, "保存文件失败", http.StatusInternalServerError)
+				return
+			}
+			defer dst.Close()
+			io.Copy(dst, file)
+
+			var uploadFileCommand UploadFileCommand
+			uploadFileCommand.TrxId = NextID()
+			uploadFileCommand.SavePath = savePath
+			uploadFileCommand.NewName = newName
+			uploadFileCommand.OrigName = origName
+			uploadFileCommand.Ext = ext
+			uploadFileCommand.MimeType = mimeType
+			err = commandBus.Send(ctx, uploadFileCommand)
 			if err != nil {
 				http.Error(w, "invalid request body", http.StatusBadRequest)
 				return
@@ -38,7 +77,7 @@ func NewHandler(repo *Repository, commandBus *cqrs.CommandBus, sseRouter watermi
 			w.Header().Set("Content-Type", "application/json")
 			Encode(w, map[string]string{
 				"status": "ok",
-				"trxid":  strconv.FormatInt(placeOrderCommand.TrxId, 10),
+				"trxid":  strconv.FormatInt(uploadFileCommand.TrxId, 10),
 			})
 		})
 	})

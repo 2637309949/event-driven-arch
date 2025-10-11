@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>ioflux</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <link rel="stylesheet" href="https://unpkg.com/mint-ui/lib/style.css">
+  <link rel="stylesheet" href="/index.css">
+</head>
+<body>
+<div id="app" class="upload-page">
+  <mt-cell title="上传文件">
+    <input type="file" ref="fileInput" @change="handleFileChange" style="display:none;">
+    <mt-button type="primary" size="small" @click="triggerFileSelect">选择文件</mt-button>
+  </mt-cell>
+  <mt-popup v-model="showPopup" position="center" :close-on-click-modal="true">
+    <div class="popup-content">
+      <h3>上传进度</h3>
+      <mt-progress :percent="progress" show-pivot></mt-progress>
+      <div>{{ progress }}%</div>
+
+      <div v-if="result" class="result-wrapper">
+        <h4>处理结果：</h4>
+        <pre>{{ result }}</pre>
+      </div>
+    </div>
+  </mt-popup>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/vue@2/dist/vue.min.js"></script>
+<script src="https://unpkg.com/mint-ui/lib/index.js"></script>
+<script src="/index.js"></script>
+</body>
+</html>

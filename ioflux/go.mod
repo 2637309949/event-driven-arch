@@ -1,4 +1,4 @@
-module cartify
+module ioflux
 
 go 1.25
 
