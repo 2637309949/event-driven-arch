@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>cqrs</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="https://unpkg.com/mint-ui/lib/style.css">
+  <link rel="stylesheet" href="/index.css">
+</head>
+<body>
+  <div id="app">
+    <mt-popup v-model="showPopup" position="center" :close-on-click-modal="true">
+      <div style="padding: 15px; text-align: center;">
+        <div class="circle" :style="{'--percent': progress}">
+          <span>{{ message || (progress + '%') }}</span>
+        </div>
+        <p style="margin: 10px auto;">{{ statusText }}</p>
+        <!-- <mt-button size="small" type="default" v-if="progress >= 100" @click="closePopup">关闭</mt-button> -->
+      </div>
+    </mt-popup>
+    <div class="checkout-bar">
+      <div class="total">合计: <span style="color: #ff7e00;">￥99</span></div>
+      <mt-button type="primary" class="checkout-btn" @click="checkout">结算</mt-button>
+    </div>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/vue@2/dist/vue.js"></script>
+  <script src="https://unpkg.com/mint-ui/lib/index.js"></script>
+  <script src="/index.js"></script>
+</body>
+</html>
