@@ -1,4 +1,5 @@
 ## 事件驱动架构
+![cartify](./cartify/cartify.gif)
 
 ### 事件驱动架构（EDA）  
 
