@@ -129,9 +129,16 @@ func NewRouters(ctx context.Context, cfg *Config, repo *Repository) (*Routers, e
 	}
 	err = eventProcessor.AddHandlers(
 		cqrs.NewEventHandler(
-			"OrderPlacedHandler",
+			"FileParsedHandler",
 			func(ctx context.Context, ev *FileParsed) error {
-				err := repo.CreateFile(ctx, &File{FileId: ev.FileId, State: 101, UserId: ev.UserId})
+				file := File{}
+				file.FileId = ev.FileId
+				file.SavePath = ev.FilePath
+				file.NewName = ev.FileName
+				file.OrigName = ev.FileName
+				file.Ext = ev.Ext
+				file.MimeType = ev.MimeType
+				err := repo.CreateFile(ctx, &file)
 				if err != nil {
 					return err
 				}
@@ -139,7 +146,7 @@ func NewRouters(ctx context.Context, cfg *Config, repo *Repository) (*Routers, e
 				trxState.TrxId = ev.TrxId
 				trxState.Type = 102
 				trxState.State = 1006
-				trxState.Name = "待支付"
+				trxState.Name = "已处理完"
 				trxState.Progress = 100
 				eventBus.Publish(ctx, &trxState)
 				time.Sleep(3 * time.Second)
@@ -171,56 +178,58 @@ func NewRouters(ctx context.Context, cfg *Config, repo *Repository) (*Routers, e
 		cqrs.NewCommandHandler(
 			"PlaceOrderHandler",
 			func(ctx context.Context, cmd *UploadFileCommand) error {
-				// 接受请求
+				// 读取文件
 				trxState := TrxState{}
 				trxState.TrxId = cmd.TrxId
 				trxState.Type = 102
 				trxState.State = 1001
-				trxState.Name = "接受请求"
+				trxState.Name = "读取文件"
 				trxState.Progress = 10
 				eventBus.Publish(ctx, &trxState)
 				time.Sleep(3 * time.Second)
-				// 正在锁定库存
+				// 解析xlsx
 				trxState = TrxState{}
 				trxState.TrxId = cmd.TrxId
 				trxState.Type = 102
 				trxState.State = 1002
-				trxState.Name = "正在锁定库存"
+				trxState.Name = "解析xlsx"
 				trxState.Progress = 20
 				eventBus.Publish(ctx, &trxState)
 				time.Sleep(3 * time.Second)
-				// 锁定库存成功
+				// 校验数据格式
 				trxState = TrxState{}
 				trxState.TrxId = cmd.TrxId
 				trxState.Type = 102
 				trxState.State = 1003
-				trxState.Name = "锁定库存成功"
+				trxState.Name = "校验数据格式"
 				trxState.Progress = 30
 				eventBus.Publish(ctx, &trxState)
 				time.Sleep(3 * time.Second)
-				// 计算订单价格
+				// 生成库存数据
 				trxState = TrxState{}
 				trxState.TrxId = cmd.TrxId
 				trxState.Type = 102
 				trxState.State = 1004
-				trxState.Name = "正在计算订单价格"
+				trxState.Name = "生成库存数据"
 				trxState.Progress = 40
 				eventBus.Publish(ctx, &trxState)
 				time.Sleep(3 * time.Second)
-				// 生成待支付单
+				// 开始导入库存
 				trxState = TrxState{}
 				trxState.TrxId = cmd.TrxId
 				trxState.Type = 102
 				trxState.State = 1005
-				trxState.Name = "生成待支付单"
+				trxState.Name = "开始导入库存"
 				trxState.Progress = 50
 				eventBus.Publish(ctx, &trxState)
 				time.Sleep(3 * time.Second)
-				fileParsed := FileParsed{
-					TrxId:   cmd.TrxId,
-					OrderId: NextID(),
-					UserId:  cmd.UserId,
-				}
+				fileParsed := FileParsed{}
+				fileParsed.FileId = NextID()
+				fileParsed.TrxId = cmd.TrxId
+				fileParsed.FilePath = cmd.SavePath
+				fileParsed.FileName = cmd.OrigName
+				fileParsed.Ext = cmd.Ext
+				fileParsed.MimeType = cmd.MimeType
 				return eventBus.Publish(ctx, &fileParsed)
 			},
 		),

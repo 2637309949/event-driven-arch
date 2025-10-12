@@ -2,11 +2,11 @@ new Vue({
     el: '#app',
     data() {
         return {
-            file: null,
             progress: 0,
-            result: null,
             eventSource: null,
-            showPopup: false
+            showPopup: false,
+            message: '',
+            statusText: '',
         };
     },
     methods: {
@@ -14,61 +14,43 @@ new Vue({
             this.$refs.fileInput.click();
         },
         handleFileChange(e) {
-            const selectedFile = e.target.files[0];
-            if (!selectedFile) return;
-            this.file = selectedFile;
-
-            // 文件选择后直接上传
-            this.uploadFile();
+            const file = e.target.files[0];
+            if (!file) return;
+            this.uploadFile(file);
         },
-        async uploadFile() {
-            const formData = new FormData();
-            formData.append("file", this.file);
-
-            this.progress = 0;
-            this.result = null;
-            this.showPopup = true;
-
+        async uploadFile(file) {
             try {
-                // POST 上传文件
-                const response = await fetch("/api/upload", {
+                const form = new FormData();
+                form.append("file", file);
+                this.progress = 0;
+                this.message = '正在上传...';
+                this.statusText = '开始跟踪进度...';
+                this.showPopup = true;
+                const res = await fetch("/api/upload", {
                     method: "POST",
-                    body: formData
+                    body: form
                 });
-                const data = await response.json();
-                console.log("上传成功，开始监听进度：", data);
-
-                // SSE 监听后台处理进度
-                await this.listenSSE(data.taskId);
+                const result = await res.json();
+                this.eventSource = new EventSource(`/api/trx/${result.trxid}`);
+                this.eventSource.addEventListener('data', e => {
+                    const data = JSON.parse(e.data) || {};
+                    this.progress = data.progress || 0;
+                    this.message = data.state || this.message;
+                    this.statusText = data.status || this.statusText;
+                    if (this.progress >= 100) {
+                        this.statusText = '下单成功，跳转支付...';
+                        this.eventSource.close();
+                    }
+                });
             } catch (err) {
                 console.error("上传失败", err);
                 this.showPopup = false;
-                alert("上传失败");
+                this.$toast(`上传失败：${err.message}`);
             }
         },
-        listenSSE(taskId) {
-            return new Promise((resolve, reject) => {
-                this.eventSource = new EventSource(`/api/progress?taskId=${taskId}`);
-
-                this.eventSource.onmessage = e => {
-                    const data = JSON.parse(e.data);
-
-                    if (data.progress !== undefined) this.progress = data.progress;
-
-                    if (data.done) {
-                        this.progress = 100;
-                        this.result = data.result;
-                        this.eventSource.close();
-                        resolve(data.result);
-                    }
-                };
-
-                this.eventSource.onerror = e => {
-                    console.error("SSE 错误", e);
-                    this.eventSource.close();
-                    reject(e);
-                };
-            });
+        closePopup() {
+            this.showPopup = false;
+            if (this.eventSource) this.eventSource.close();
         }
     }
 });

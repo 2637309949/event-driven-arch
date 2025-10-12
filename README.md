@@ -12,6 +12,7 @@
 <p align="left">
   <img src="./cartify/cartify.gif" width="300">
   <img src="./web3/web3.gif" width="300">
+  <img src="./ioflux/ioflux.gif" width="300">
 </p>
 
 ### 微服务整合实践
