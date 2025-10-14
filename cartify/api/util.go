@@ -1,6 +1,7 @@
 package main
 
 import (
+	stdSQL "database/sql"
 	"encoding/json"
 	"io"
 	"time"
@@ -38,4 +39,12 @@ func Decode(r io.Reader, v interface{}) error {
 
 func Encode(w io.Writer, v interface{}) error {
 	return json.NewEncoder(w).Encode(v)
+}
+
+func Open(driverName string, dataSourceName string) *stdSQL.DB {
+	db, err := stdSQL.Open(driverName, dataSourceName)
+	if err != nil {
+		panic(err)
+	}
+	return db
 }

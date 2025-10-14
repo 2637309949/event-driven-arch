@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"log"
 	"os"
 	"os/signal"
 	"syscall"
@@ -41,7 +40,7 @@ type Routers struct {
 	delayedRequeuer *sql.DelayedRequeuer
 }
 
-func (r *Routers) Run(ctx context.Context) error {
+func (r *Routers) Run(ctx context.Context) {
 	ctx, _ = signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		err := r.EventsRouter.Run(ctx)
@@ -60,13 +59,11 @@ func (r *Routers) Run(ctx context.Context) error {
 
 	<-ctx.Done()
 	if err := r.EventsRouter.Close(); err != nil {
-		log.Println("router close error:", err)
-		return err
+		panic(err)
 	}
-	return nil
 }
 
-func NewRouters(ctx context.Context, cfg *Config, repo *Repository) (*Routers, error) {
+func NewRouters(ctx context.Context, cfg *Config, repo *Repository) *Routers {
 	marshaler := cqrs.JSONMarshaler{
 		GenerateName: cqrs.StructName,
 	}
@@ -226,5 +223,5 @@ func NewRouters(ctx context.Context, cfg *Config, repo *Repository) (*Routers, e
 	routers.delayedRequeuer = delayedRequeuer
 	routers.EventsRouter = router
 	routers.EventBus = eventBus
-	return &routers, nil
+	return &routers
 }

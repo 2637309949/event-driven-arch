@@ -1,6 +1,9 @@
 package main
 
-import "time"
+import (
+	stdSQL "database/sql"
+	"time"
+)
 
 var (
 	sf    *Snowflake
@@ -16,4 +19,12 @@ func init() {
 }
 func NextID() int64 {
 	return sf.NextID()
+}
+
+func Open(driverName string, dataSourceName string) *stdSQL.DB {
+	db, err := stdSQL.Open(driverName, dataSourceName)
+	if err != nil {
+		panic(err)
+	}
+	return db
 }

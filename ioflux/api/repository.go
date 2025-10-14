@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"time"
 )
 
@@ -25,9 +26,11 @@ INSERT INTO cqrs_trx (trxid, type, state, name, progress) VALUES
 ON CONFLICT (trxid) DO NOTHING;
 `
 
-func MigrateDB(db *sql.DB) error {
+func MigrateDB(db *sql.DB) {
 	_, err := db.Exec(migration)
-	return err
+	if err != nil {
+		fmt.Println()
+	}
 }
 
 type Repository struct {

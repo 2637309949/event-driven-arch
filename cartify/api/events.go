@@ -68,7 +68,7 @@ func (r *Routers) Run(ctx context.Context) {
 	}()
 }
 
-func NewRouters(ctx context.Context, cfg *Config, repo *Repository) (*Routers, error) {
+func NewRouters(ctx context.Context, cfg *Config, repo *Repository) *Routers {
 	redisClient := redis.NewClient(&redis.Options{Addr: redisAddr})
 	marshaler := cqrs.JSONMarshaler{
 		GenerateName: cqrs.StructName,
@@ -149,5 +149,5 @@ func NewRouters(ctx context.Context, cfg *Config, repo *Repository) (*Routers, e
 	routers.EventsRouter = router
 	routers.CommandBus = commandBus
 	routers.SSERouter = sseRouter
-	return &routers, nil
+	return &routers
 }

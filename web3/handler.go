@@ -1,12 +1,15 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/ThreeDotsLabs/watermill"
-	watermillhttp "github.com/ThreeDotsLabs/watermill-http/v2/pkg/http"
-	"github.com/ThreeDotsLabs/watermill/components/cqrs"
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/go-chi/chi/v5"
 )
@@ -17,9 +20,34 @@ type HomeStats struct {
 	Value int    `json:"value"`
 }
 
-func NewHandler(repo *Repository, eventBus *cqrs.EventBus, sseRouter watermillhttp.SSERouter) *chi.Mux {
+type Handler struct {
+	*chi.Mux
+	routers *Routers
+}
+
+func (h *Handler) Run(ctx context.Context) {
+	ctx, _ = signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+	server := &http.Server{Addr: ":8080", Handler: h}
+	h.routers.Run(ctx) // 确保注册完事件处理函数
+	go func() {
+		logger.Info("Server started at", watermill.LogFields{"port": "8080"})
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logger.Error("ListenAndServe error", err, watermill.LogFields{})
+		}
+	}()
+	<-ctx.Done()
+	logger.Info("Shutting down server...", watermill.LogFields{})
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	if err := server.Shutdown(ctx); err != nil {
+		logger.Error("ListenAndServe error", err, watermill.LogFields{})
+	}
+	logger.Info("Server exiting", watermill.LogFields{})
+}
+
+func NewHandler(repo *Repository, routers *Routers) *Handler {
 	sseStream := occurredStreamAdapter{logger: logger, repo: repo}
-	sseHandler := sseRouter.AddHandler(topic, sseStream)
+	sseHandler := routers.SSERouter.AddHandler(topic, sseStream)
 	r := chi.NewRouter()
 	r.Handle("/*", http.FileServer(http.Dir("./views")))
 	r.Route("/api", func(r chi.Router) {
@@ -28,10 +56,13 @@ func NewHandler(repo *Repository, eventBus *cqrs.EventBus, sseRouter watermillht
 			is := ItemSet{}
 			is.Key = "hello"
 			is.Value = "2025"
-			eventBus.Publish(ctx, &is)
+			routers.EventBus.Publish(ctx, &is)
 		})
 	})
-	return r
+	h := Handler{}
+	h.Mux = r
+	h.routers = routers
+	return &h
 }
 
 type occurredStreamAdapter struct {

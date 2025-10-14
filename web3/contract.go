@@ -101,7 +101,7 @@ func (c *Contract) FilterLogsByTime(ctx context.Context, contractAddr common.Add
 }
 
 // 实时监控
-func (c *Contract) Watch(ctx context.Context) error {
+func (c *Contract) Watch(ctx context.Context) {
 	// ──────────────── 1. NFT 事件监听 ────────────────
 	nftCh := make(chan types.Log)
 	nftAbi, _ := abi.JSON(strings.NewReader(nft.NftABI))
@@ -109,13 +109,13 @@ func (c *Contract) Watch(ctx context.Context) error {
 		Addresses: []common.Address{nftAddress},
 	}, nftCh)
 	if err != nil {
-		return err
+		panic(err)
 	}
 	// ──────────────── 2. Store 事件监听 ────────────────
 	itemSetChan := make(chan *store.StoreItemSet)
 	isSub, err := c.store.WatchItemSet(&bind.WatchOpts{Context: ctx}, itemSetChan)
 	if err != nil {
-		return err
+		panic(err)
 	}
 	// ──────────────── 3. Aave 事件监听（新增）───────────────
 	aaveCh := make(chan types.Log)
@@ -124,7 +124,7 @@ func (c *Contract) Watch(ctx context.Context) error {
 		Addresses: []common.Address{aaveAddress},
 	}, aaveCh)
 	if err != nil {
-		return err
+		panic(err)
 	}
 	go func() {
 		for {
@@ -161,7 +161,6 @@ func (c *Contract) Watch(ctx context.Context) error {
 			}
 		}
 	}()
-	return nil
 }
 
 // 解析日志

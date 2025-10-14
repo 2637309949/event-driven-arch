@@ -64,6 +64,7 @@ func (r *Routers) Run(ctx context.Context) {
 		}
 	}()
 	<-r.SSERouter.Running()
+
 	go func() {
 		<-ctx.Done()
 		if err := r.EventsRouter.Close(); err != nil {
@@ -72,7 +73,7 @@ func (r *Routers) Run(ctx context.Context) {
 	}()
 }
 
-func NewRouters(ctx context.Context, cfg *Config, repo *Repository) (*Routers, error) {
+func NewRouters(ctx context.Context, cfg *Config, repo *Repository) *Routers {
 	redisClient := redis.NewClient(&redis.Options{Addr: redisAddr})
 	marshaler := cqrs.JSONMarshaler{
 		GenerateName: cqrs.StructName,
@@ -111,7 +112,7 @@ func NewRouters(ctx context.Context, cfg *Config, repo *Repository) (*Routers, e
 	}
 	err = eventProcessor.AddHandlers(
 		cqrs.NewEventHandler(
-			"OnOrderPlacedHandler",
+			"OnTrxStateHandler",
 			func(ctx context.Context, ev *TrxState) error {
 				fmt.Printf("received event %+v\n", ev)
 				err := repo.SaveTrx(ctx, ev.TrxId, func(trx *Trx) {
@@ -153,5 +154,5 @@ func NewRouters(ctx context.Context, cfg *Config, repo *Repository) (*Routers, e
 	routers.EventsRouter = router
 	routers.CommandBus = commandBus
 	routers.SSERouter = sseRouter
-	return &routers, nil
+	return &routers
 }

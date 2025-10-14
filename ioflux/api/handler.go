@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -8,19 +9,45 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strconv"
+	"syscall"
+	"time"
 
 	"github.com/ThreeDotsLabs/watermill"
-	watermillhttp "github.com/ThreeDotsLabs/watermill-http/v2/pkg/http"
-	"github.com/ThreeDotsLabs/watermill/components/cqrs"
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/go-chi/chi"
 )
 
-func NewHandler(repo *Repository, commandBus *cqrs.CommandBus, sseRouter watermillhttp.SSERouter) *chi.Mux {
+type Handler struct {
+	*chi.Mux
+	routers *Routers
+}
+
+func (h *Handler) Run(ctx context.Context) {
+	ctx, _ = signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+	server := &http.Server{Addr: ":8080", Handler: h}
+	h.routers.Run(ctx) // 确保注册完事件处理函数
+	go func() {
+		logger.Info("Server started at", watermill.LogFields{"port": "8080"})
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logger.Error("ListenAndServe error", err, watermill.LogFields{})
+		}
+	}()
+	<-ctx.Done()
+	logger.Info("Shutting down server...", watermill.LogFields{})
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	if err := server.Shutdown(ctx); err != nil {
+		logger.Error("ListenAndServe error", err, watermill.LogFields{})
+	}
+	logger.Info("Server exiting", watermill.LogFields{})
+}
+
+func NewHandler(repo *Repository, routers *Routers) *Handler {
 	sseStream := trxStreamAdapter{logger: logger, repo: repo}
-	sseHandler := sseRouter.AddHandler(topic, sseStream)
+	sseHandler := routers.SSERouter.AddHandler(topic, sseStream)
 	r := chi.NewRouter()
 	r.Handle("/*", http.FileServer(http.Dir("./views")))
 	r.Route("/api", func(r chi.Router) {
@@ -69,7 +96,7 @@ func NewHandler(repo *Repository, commandBus *cqrs.CommandBus, sseRouter watermi
 			uploadFileCommand.OrigName = origName
 			uploadFileCommand.Ext = ext
 			uploadFileCommand.MimeType = mimeType
-			err = commandBus.Send(ctx, uploadFileCommand)
+			err = routers.CommandBus.Send(ctx, uploadFileCommand)
 			if err != nil {
 				http.Error(w, "invalid request body", http.StatusBadRequest)
 				return
@@ -81,7 +108,11 @@ func NewHandler(repo *Repository, commandBus *cqrs.CommandBus, sseRouter watermi
 			})
 		})
 	})
-	return r
+
+	h := Handler{}
+	h.Mux = r
+	h.routers = routers
+	return &h
 }
 
 type trxStreamAdapter struct {

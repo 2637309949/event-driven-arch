@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"time"
 )
 
@@ -19,9 +20,11 @@ INSERT INTO cqrs_order (order_id, user_id, state) VALUES
 ON CONFLICT (order_id) DO NOTHING;
 `
 
-func MigrateDB(db *sql.DB) error {
+func MigrateDB(db *sql.DB) {
 	_, err := db.Exec(migration)
-	return err
+	if err != nil {
+		fmt.Println(err)
+	}
 }
 
 type Repository struct {

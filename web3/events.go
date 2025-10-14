@@ -87,23 +87,23 @@ func (r *Routers) Run(ctx context.Context) {
 	}()
 }
 
-func NewRouters(ctx context.Context, cfg *Config, repo *Repository) (*Routers, error) {
+func NewRouters(ctx context.Context, cfg *Config, repo *Repository) *Routers {
 	ctx, _ = signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	redisClient := redis.NewClient(&redis.Options{Addr: redisAddr})
 	marshaler := cqrs.JSONMarshaler{GenerateName: cqrs.StructName}
 	router, err := message.NewRouter(message.RouterConfig{}, logger)
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
 	router.AddPlugin(plugin.SignalsHandler)
 	router.AddMiddleware(middleware.Recoverer)
 	subscriber, err := redisstream.NewSubscriber(redisstream.SubscriberConfig{Client: redisClient}, logger)
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
 	publisher, err := redisstream.NewPublisher(redisstream.PublisherConfig{Client: redisClient}, logger)
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
 	eventBus, err := cqrs.NewEventBusWithConfig(publisher, cqrs.EventBusConfig{
 		GeneratePublishTopic: func(params cqrs.GenerateEventPublishTopicParams) (string, error) {
@@ -113,7 +113,7 @@ func NewRouters(ctx context.Context, cfg *Config, repo *Repository) (*Routers, e
 		Logger:    logger,
 	})
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
 	eventProcessor, err := cqrs.NewEventProcessorWithConfig(router, cqrs.EventProcessorConfig{
 		GenerateSubscribeTopic: func(params cqrs.EventProcessorGenerateSubscribeTopicParams) (string, error) {
@@ -129,7 +129,7 @@ func NewRouters(ctx context.Context, cfg *Config, repo *Repository) (*Routers, e
 		Logger:    logger,
 	})
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
 	eventProcessor.AddHandlers(
 		cqrs.NewEventHandler(
@@ -363,7 +363,7 @@ func NewRouters(ctx context.Context, cfg *Config, repo *Repository) (*Routers, e
 		Logger:    logger,
 	})
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
 	commandProcessor.AddHandlers(
 		cqrs.NewCommandHandler(
@@ -384,12 +384,12 @@ func NewRouters(ctx context.Context, cfg *Config, repo *Repository) (*Routers, e
 		logger,
 	)
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
 	routers := Routers{}
 	routers.SSERouter = sseRouter
 	routers.EventsRouter = router
 	routers.EventBus = eventBus
 	routers.CommandBus = commandBus
-	return &routers, nil
+	return &routers
 }

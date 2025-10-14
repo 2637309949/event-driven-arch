@@ -1,8 +1,13 @@
 package main
 
-func mustNew(r interface{}, err error) interface{} {
+import (
+	stdSQL "database/sql"
+)
+
+func Open(driverName string, dataSourceName string) *stdSQL.DB {
+	db, err := stdSQL.Open(driverName, dataSourceName)
 	if err != nil {
 		panic(err)
 	}
-	return r
+	return db
 }

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"fmt"
 )
 
 const migration = `
@@ -21,9 +22,11 @@ VALUES (764428779249475584, '/uploads/2025/10', 'example.txt', '原始文件.txt
 ON CONFLICT (file_id) DO NOTHING;
 `
 
-func MigrateDB(db *sql.DB) error {
+func MigrateDB(db *sql.DB) {
 	_, err := db.Exec(migration)
-	return err
+	if err != nil {
+		fmt.Println(err)
+	}
 }
 
 type Repository struct {
