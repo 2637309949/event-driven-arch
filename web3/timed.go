@@ -2,8 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
-	"log"
 	"time"
 
 	"github.com/ThreeDotsLabs/watermill/components/cqrs"
@@ -25,7 +23,7 @@ func (t *Timed) TimedFlushTest() {
 	}
 	err := t.eventBus.Publish(ctx, &er)
 	if err != nil {
-		log.Println("eventBus.Publish err:", err)
+		Warnf("eventBus.Publish err:%v", err)
 		return
 	}
 }
@@ -34,7 +32,7 @@ func (t *Timed) TimedFlushStat() {
 	/// 刷新交易总数
 	nonce, err := t.contract.PendingNonceAt(ctx, walletAddress)
 	if err != nil {
-		fmt.Println(err)
+		Warnf("PendingNonceAt err:%v", err)
 	}
 	ep := EventStats{
 		EventLabel: "交易总数",
@@ -43,13 +41,13 @@ func (t *Timed) TimedFlushStat() {
 	}
 	err = t.repo.UpdateEventStats(ctx, &ep)
 	if err != nil {
-		fmt.Println(err)
+		Warnf("UpdateEventStats err:%v", err)
 		return
 	}
 	/// 刷新活跃用户
 	au, err := t.repo.QueryActiveUsers(ctx)
 	if err != nil {
-		fmt.Println(err)
+		Warnf("QueryActiveUsers err:%v", err)
 		return
 	}
 	ep = EventStats{
@@ -59,7 +57,7 @@ func (t *Timed) TimedFlushStat() {
 	}
 	err = t.repo.UpdateEventStats(ctx, &ep)
 	if err != nil {
-		fmt.Println(err)
+		Warnf("UpdateEventStats err:%v", err)
 		return
 	}
 }

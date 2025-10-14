@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"os/signal"
 	"syscall"
@@ -48,36 +47,26 @@ type Routers struct {
 }
 
 func (r *Routers) Run(ctx context.Context) {
-	ctx, _ = signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
-	go func() {
-		err := r.EventsRouter.Run(ctx)
-		if err != nil {
-			panic(err)
-		}
-	}()
-	<-r.EventsRouter.Running()
+	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
-	go func() {
-		err := r.SSERouter.Run(ctx)
-		if err != nil {
-			panic(err)
-		}
-	}()
+	errc := make(chan error, 2)
+	go func() { errc <- r.EventsRouter.Run(ctx) }()
+	<-r.EventsRouter.Running()
+	go func() { errc <- r.SSERouter.Run(ctx) }()
 	<-r.SSERouter.Running()
 
-	go func() {
-		<-ctx.Done()
-		if err := r.EventsRouter.Close(); err != nil {
-			log.Println("router close error:", err)
-		}
-	}()
+	select {
+	case <-ctx.Done():
+		r.EventsRouter.Close()
+	case err := <-errc:
+		Fatalf("router error: %v", err)
+	}
 }
 
 func NewRouters(ctx context.Context, cfg *Config, repo *Repository) *Routers {
 	redisClient := redis.NewClient(&redis.Options{Addr: redisAddr})
-	marshaler := cqrs.JSONMarshaler{
-		GenerateName: cqrs.StructName,
-	}
+	marshaler := cqrs.JSONMarshaler{GenerateName: cqrs.StructName}
 	subscriber, err := redisstream.NewSubscriber(redisstream.SubscriberConfig{Client: redisClient}, logger)
 	if err != nil {
 		panic(err)

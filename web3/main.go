@@ -8,9 +8,6 @@ import (
 	"github.com/robfig/cron"
 )
 
-type Config struct {
-}
-
 var (
 	topic          = "EventOccurred"
 	redisAddr      = "127.0.0.1:6379"
@@ -23,9 +20,9 @@ var (
 
 func main() {
 	MigrateDB(db)
-	config := Config{}
+	config := NewConfig()
 	repos := NewRepository(db)
-	routers := NewRouters(ctx, &config, repos)
+	routers := NewRouters(ctx, config, repos)
 	ct := NewContract(routers)
 	ct.Watch(ctx)
 

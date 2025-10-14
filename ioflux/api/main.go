@@ -7,9 +7,6 @@ import (
 	_ "github.com/lib/pq"
 )
 
-type Config struct {
-}
-
 var (
 	topic          = "TrxState"
 	redisAddr      = "127.0.0.1:6379"
@@ -22,9 +19,9 @@ var (
 
 func main() {
 	MigrateDB(db)
-	cfg := Config{}
+	config := NewConfig()
 	repo := NewRepository(db)
-	routers := NewRouters(ctx, &cfg, repo)
+	routers := NewRouters(ctx, config, repo)
 	srv := NewHandler(repo, routers)
 	srv.Run(ctx)
 }

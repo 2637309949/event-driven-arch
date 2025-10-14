@@ -8,9 +8,6 @@ import (
 	"github.com/ThreeDotsLabs/watermill"
 )
 
-type Config struct {
-}
-
 var (
 	redisAddr      = "127.0.0.1:6379"
 	driverName     = "postgres"
@@ -22,8 +19,8 @@ var (
 
 func main() {
 	MigrateDB(db)
-	config := Config{}
+	config := NewConfig()
 	repo := NewRepository(db)
-	routers := NewRouters(ctx, &config, repo)
+	routers := NewRouters(ctx, config, repo)
 	routers.Run(ctx)
 }

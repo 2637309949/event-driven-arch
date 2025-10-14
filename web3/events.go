@@ -62,48 +62,39 @@ type Routers struct {
 }
 
 func (r *Routers) Run(ctx context.Context) {
-	ctx, _ = signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
-	go func() {
-		err := r.EventsRouter.Run(ctx)
-		if err != nil {
-			panic(err)
-		}
-	}()
-	<-r.EventsRouter.Running()
+	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
-	go func() {
-		err := r.SSERouter.Run(ctx)
-		if err != nil {
-			panic(err)
-		}
-	}()
+	errc := make(chan error, 2)
+	go func() { errc <- r.EventsRouter.Run(ctx) }()
+	<-r.EventsRouter.Running()
+	go func() { errc <- r.SSERouter.Run(ctx) }()
 	<-r.SSERouter.Running()
 
-	go func() {
-		<-ctx.Done()
-		if err := r.EventsRouter.Close(); err != nil {
-			log.Println("router close error:", err)
-		}
-	}()
+	select {
+	case <-ctx.Done():
+		r.EventsRouter.Close()
+	case err := <-errc:
+		Fatalf("router error: %v", err)
+	}
 }
 
 func NewRouters(ctx context.Context, cfg *Config, repo *Repository) *Routers {
-	ctx, _ = signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	redisClient := redis.NewClient(&redis.Options{Addr: redisAddr})
 	marshaler := cqrs.JSONMarshaler{GenerateName: cqrs.StructName}
 	router, err := message.NewRouter(message.RouterConfig{}, logger)
 	if err != nil {
-		panic(err)
+		Fatalf("NewRouter fatal%v", err)
 	}
 	router.AddPlugin(plugin.SignalsHandler)
 	router.AddMiddleware(middleware.Recoverer)
 	subscriber, err := redisstream.NewSubscriber(redisstream.SubscriberConfig{Client: redisClient}, logger)
 	if err != nil {
-		panic(err)
+		Fatalf("NewSubscriber fatal%v", err)
 	}
 	publisher, err := redisstream.NewPublisher(redisstream.PublisherConfig{Client: redisClient}, logger)
 	if err != nil {
-		panic(err)
+		Fatalf("NewPublisher fatal%v", err)
 	}
 	eventBus, err := cqrs.NewEventBusWithConfig(publisher, cqrs.EventBusConfig{
 		GeneratePublishTopic: func(params cqrs.GenerateEventPublishTopicParams) (string, error) {
@@ -113,7 +104,7 @@ func NewRouters(ctx context.Context, cfg *Config, repo *Repository) *Routers {
 		Logger:    logger,
 	})
 	if err != nil {
-		panic(err)
+		Fatalf("NewEventBusWithConfig fatal%v", err)
 	}
 	eventProcessor, err := cqrs.NewEventProcessorWithConfig(router, cqrs.EventProcessorConfig{
 		GenerateSubscribeTopic: func(params cqrs.EventProcessorGenerateSubscribeTopicParams) (string, error) {
@@ -129,7 +120,7 @@ func NewRouters(ctx context.Context, cfg *Config, repo *Repository) *Routers {
 		Logger:    logger,
 	})
 	if err != nil {
-		panic(err)
+		Fatalf("NewEventProcessorWithConfig fatal%v", err)
 	}
 	eventProcessor.AddHandlers(
 		cqrs.NewEventHandler(
@@ -347,7 +338,7 @@ func NewRouters(ctx context.Context, cfg *Config, repo *Repository) *Routers {
 		Logger:    logger,
 	})
 	if err != nil {
-		panic(err)
+		Fatalf("NewCommandBusWithConfig fatal%v", err)
 	}
 	commandProcessor, err := cqrs.NewCommandProcessorWithConfig(router, cqrs.CommandProcessorConfig{
 		GenerateSubscribeTopic: func(params cqrs.CommandProcessorGenerateSubscribeTopicParams) (string, error) {
@@ -363,7 +354,7 @@ func NewRouters(ctx context.Context, cfg *Config, repo *Repository) *Routers {
 		Logger:    logger,
 	})
 	if err != nil {
-		panic(err)
+		Fatalf("NewCommandProcessorWithConfig fatal%v", err)
 	}
 	commandProcessor.AddHandlers(
 		cqrs.NewCommandHandler(
@@ -384,7 +375,7 @@ func NewRouters(ctx context.Context, cfg *Config, repo *Repository) *Routers {
 		logger,
 	)
 	if err != nil {
-		panic(err)
+		Fatalf("NewSSERouter fatal%v", err)
 	}
 	routers := Routers{}
 	routers.SSERouter = sseRouter

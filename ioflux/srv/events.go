@@ -48,32 +48,24 @@ type Routers struct {
 }
 
 func (r *Routers) Run(ctx context.Context) {
-	ctx, _ = signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
-	go func() {
-		err := r.EventsRouter.Run(ctx)
-		if err != nil {
-			panic(err)
-		}
-	}()
+	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	errc := make(chan error, 2)
+	go func() { errc <- r.EventsRouter.Run(ctx) }()
 	<-r.EventsRouter.Running()
+	go func() { errc <- r.delayedRequeuer.Run(ctx) }()
 
-	go func() {
-		err := r.delayedRequeuer.Run(ctx)
-		if err != nil {
-			panic(err)
-		}
-	}()
-
-	<-ctx.Done()
-	if err := r.EventsRouter.Close(); err != nil {
-		panic(err)
+	select {
+	case <-ctx.Done():
+		r.EventsRouter.Close()
+	case err := <-errc:
+		Fatalf("router error: %v", err)
 	}
 }
 
 func NewRouters(ctx context.Context, cfg *Config, repo *Repository) *Routers {
-	marshaler := cqrs.JSONMarshaler{
-		GenerateName: cqrs.StructName,
-	}
+	marshaler := cqrs.JSONMarshaler{GenerateName: cqrs.StructName}
 	redisClient := redis.NewClient(&redis.Options{Addr: redisAddr})
 	publisher, err := redisstream.NewPublisher(redisstream.PublisherConfig{
 		Client: redisClient,

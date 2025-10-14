@@ -25,7 +25,7 @@ type Handler struct {
 func (h *Handler) Run(ctx context.Context) {
 	ctx, _ = signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	server := &http.Server{Addr: ":8080", Handler: h}
-	h.routers.Run(ctx) // 确保注册完事件处理函数
+	go h.routers.Run(ctx) // 确保注册完事件处理函数
 	go func() {
 		logger.Info("Server started at", watermill.LogFields{"port": "8080"})
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
