@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>NFT</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <link rel="stylesheet" href="https://unpkg.com/mint-ui/lib/style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+  <link rel="stylesheet" href="/index.css">
+</head>
+<body>
+<div id="app">
+  <div class="content">
+    <div class="home" v-if="activeTab === 'home'" style="height:100%;">
+      <mt-loadmore :top-method="loadTop" :auto-fill="true" ref="loadmore" style="height:100%;">
+        <div>
+          <h2>首页</h2>
+          <!-- 铸造进度条模块 -->
+          <div class="mint-progress-container">
+            <h4 class="progress-title">铸造进度</h4>
+            <div class="progress-bar-bg">
+              <div class="progress-bar-fill" :style="{ width: progressPercent + '%' }"></div>
+            </div>
+            <div class="progress-text">
+              <span class="stat-totalSupply" id="stat-totalSupply">100</span>/<span class="stat-maxSupply" id="stat-maxSupply">1000</span>
+            </div>
+          </div>
+          <!-- 铸造统计模块 -->
+          <div class="stats-grid">
+            <div class="stat-card" v-for="(item, index) in stats" :key="index">
+              <div class="stat-label">{{ item.label }}</div>
+              <div class="stat-value" :id="'stat-' + item.name"></div>
+            </div>
+          </div>
+          <div style="padding: 15px;">
+            <mt-button type="primary" size="large" @click="popupMintNFTVisible=true">
+                <template v-if="mintLoading">
+                  <i class="mt-icon-loading"></i> 铸造中...
+                </template>
+                <template v-else>
+                  开始铸造
+                </template>
+            </mt-button>
+            <mt-popup :style="{width: '100%'}" v-model="popupMintNFTVisible" position="bottom">
+                <div  class="content">
+                  <mt-header :style="{ backgroundColor: 'unset', color: '#222' }" title="铸造 NFT"></mt-header>
+                  <div style="margin: 10px 0;">
+                    <mt-field v-model.number="mintQuantity" type="number" placeholder="输入数量" label="数量" :min="1"></mt-field>
+                  </div>
+                  <mt-button :disabled="mintLoading" type="primary" size="large" @click="mintNFT(mintQuantity)">
+                    <template v-if="mintLoading">
+                      <i class="mt-icon-loading"></i> 铸造中...
+                    </template>
+                    <template v-else>
+                      铸造
+                    </template>
+                  </mt-button>
+                </div>
+            </mt-popup>
+          </div>
+        </div>
+      </mt-loadmore>
+    </div>
+    <div class="me" v-if="activeTab === 'me'">
+      <mt-loadmore :top-method="meLoadTop" :auto-fill="true" ref="meLoadmore" style="height:100%;">
+        <div>
+          <h2>我的</h2>
+          <div v-if="account">
+            <mt-cell title="账户地址">
+              <span style="color:gray;"> {{ account ? account.slice(0,24) + '...' : '' }}</span>
+            </mt-cell>
+            <mt-cell title="余额 (ETH)">
+              <span style="color:gray;">{{ balance }}</span>
+            </mt-cell>
+            <mt-cell title="持有NFT（个）">
+              <span style="color:gray;">{{ nftList.length }}</span>
+            </mt-cell>
+            <div class="card-wrapper" v-if="nftList.length">
+              <h3>最近铸造的 NFT</h3>
+              <div class="stats-grid">
+                <div class="stat-card" v-for="(nft, index) in nftList" :key="nft.tokenId" @click="showMeta(nft.tokenId)">
+                  <img :src="nft.imageURL" alt="NFT Image" style="width:100%; border-radius:8px;" />
+                  <div style="margin-top:5px;">
+                    <strong>#{{ nft.tokenId }}</strong> 
+                  </div>
+                </div>
+                <!-- NFT Metadata 弹窗 -->
+                <mt-popup v-model="metaVisible" position="center" class="meta-popup">
+                  <div v-if="metaData" style="padding:20px; max-width:400px;width: 80vw;">
+                    <h3 style="margin-bottom:10px;">{{ metaData.name }}</h3>
+                    <img :src="metaData.imageURL" style="width:100%; border-radius:10px; margin-bottom:10px;"/>
+                    <p v-if="metaData.description" style="margin-bottom:10px; color:#555;">{{ metaData.description }}</p>
+                    <div v-if="metaData.attributes && metaData.attributes.length">
+                      <div v-for="(attr, i) in metaData.attributes" :key="i" style="background:#f6f6f6; padding:8px; border-radius:6px; margin-bottom:6px;">
+                        <strong>{{ attr.trait_type }}:</strong> {{ attr.value }}
+                      </div>
+                    </div>
+                    <mt-button size="large" type="primary" style="margin-top:10px;" @click="metaVisible = false">
+                      关闭
+                    </mt-button>
+                  </div>
+                </mt-popup>
+              </div>
+            </div>
+            <div style="padding: 15px;">
+              <mt-button type="danger" size="large" @click="disconnectWallet">
+                断开钱包
+              </mt-button>
+            </div>
+          </div>
+          <div v-else style="padding: 15px;">
+            <mt-button type="primary" size="large" @click="connectWallet">
+              连接钱包
+            </mt-button>
+          </div>
+        </div>
+      </mt-loadmore>
+    </div>
+  </div>
+  <mt-tabbar v-model="activeTab">
+    <mt-tab-item id="home">
+        <i slot="icon"class="fas fa-house" style='color:gray'></i>
+        <span>首页</span>
+    </mt-tab-item>
+    <mt-tab-item id="me">
+        <i slot="icon" class="fas fa-user" style='color:gray'></i>
+        <span>我的</span>
+    </mt-tab-item>
+  </mt-tabbar>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/vue@2/dist/vue.js"></script>
+<script src="https://unpkg.com/mint-ui/lib/index.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/web3@1.10.0/dist/web3.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/countup.js@2.6.2/dist/countUp.umd.js"></script>
+<script src="/contract.js"></script>
+<script src="/index.js"></script>
+</body>
+</html>

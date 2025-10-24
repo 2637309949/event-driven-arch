@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>SimpleSwap</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <link rel="stylesheet" href="https://unpkg.com/mint-ui/lib/style.css">
+  <link rel="stylesheet" href="/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
+  <script src="https://unpkg.com/mint-ui/lib/index.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/web3@1.10.0/dist/web3.min.js"></script>
+</head>
+<body>
+  <div id="app">
+    <mt-header title="SimpleSwap"></mt-header>
+    <div style="padding:20px;text-align:center;">
+      <mt-field label="ETH 数量" :placeholder="ethBalance ? ethBalance : '0.01'" v-model="ethAmount"></mt-field>
+      <mt-button type="primary" size="large" style="margin-top:20px;" @click="connect">连接钱包</mt-button>
+      <mt-button type="danger" size="large" style="margin-top:10px;" @click="swap">立即 Swap</mt-button>
+      <div v-if="usdcBalance !== null" style="margin-top:20px;">
+        <p>USDC 余额: {{ usdcBalance }}</p>
+      </div>
+    </div>
+    <mt-popup v-model="loading" position="center">
+      <div style="padding:30px;text-align:center;">
+        <mt-spinner type="fading-circle"></mt-spinner>
+        <p style="margin-top:10px;">{{ statusText }}</p>
+      </div>
+    </mt-popup>
+  </div>
+  <script>
+    new Vue({
+      el: '#app',
+      data: {
+        web3: null,
+        account: '',
+        contract: null,
+        usdcContract: null,
+        ethAmount: '',      // 用户输入 ETH
+        ethBalance: null,   // 账户余额，用于 placeholder
+        loading: false,
+        statusText: '正在执行交易...',
+        pollInterval: null,
+        usdcBalance: null,
+      },
+      methods: {
+        async setAccount(account) {
+          this.account = account;
+          const balanceWei = await this.web3.eth.getBalance(account);
+          this.ethBalance = this.web3.utils.fromWei(balanceWei, 'ether');
+        },
+        async setUSDCBalance() {
+          if (!this.account || !this.usdcContract) return;
+          const balance = await this.usdcContract.methods.balanceOf(this.account).call();
+          console.log('USDC Balance:', balance);
+          this.usdcBalance = (balance / 1e6).toFixed(6);
+        },
+        async connect() {
+          if (!window.ethereum) {
+            this.$toast('未检测到 MetaMask，请先安装');
+            return;
+          }
+          this.web3 = new Web3(window.ethereum);
+          try {
+            await window.ethereum.request({ method: 'eth_requestAccounts' });
+            const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+            if (accounts.length) {
+              await this.setAccount(accounts[0]);
+            }
+
+            // 合约 ABI 和地址
+            const abi = [{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"user","type":"address"},{"indexed":false,"internalType":"uint256","name":"ethAmount","type":"uint256"},{"indexed":false,"internalType":"string","name":"reason","type":"string"}],"name":"SwapFailed","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"user","type":"address"},{"indexed":false,"internalType":"uint256","name":"ethAmount","type":"uint256"},{"indexed":false,"internalType":"uint256","name":"tokenAmount","type":"uint256"}],"name":"SwapSucceeded","type":"event"},{"inputs":[],"name":"UNISWAP_ROUTER","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"USDC","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"WETH","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256","name":"amountOutMin","type":"uint256"},{"internalType":"uint256","name":"deadline","type":"uint256"}],"name":"swapETHForUSDC","outputs":[],"stateMutability":"payable","type":"function"},{"stateMutability":"payable","type":"receive"}];
+            const contractAddress = "0x44506214dc0ABBbF07cBa4b38689A2aBfaF82861";
+            this.contract = new this.web3.eth.Contract(abi, contractAddress);
+
+            const usdcAbi = [{"constant":true,"inputs":[{"name":"account","type":"address"}],"name":"balanceOf","outputs":[{"name":"","type":"uint256"}],"type":"function"}];
+            const usdcAddress = "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238";
+            this.usdcContract = new this.web3.eth.Contract(usdcAbi, usdcAddress);
+            await this.setUSDCBalance();
+          } catch (e) {
+            console.error(e);
+          }
+        },
+        async swap() {
+          if (!this.contract) return this.$toast('请先连接钱包');
+          if (!this.ethAmount || isNaN(this.ethAmount) || Number(this.ethAmount) <= 0) {
+            return this.$toast('请输入有效的 ETH 数量');
+          }
+
+          const valueWei = this.web3.utils.toWei(this.ethAmount, 'ether');
+
+          // 检查余额是否足够支付 ETH + Gas
+          const balanceWei = await this.web3.eth.getBalance(this.account);
+          if (BigInt(balanceWei) < BigInt(valueWei)) {
+            return this.$toast('账户余额不足，请减少 ETH 数量');
+          }
+
+          this.loading = true;
+          this.statusText = '等待钱包签名...';
+          const deadline = Math.floor(Date.now() / 1000) + 300;
+          const amountOutMin = 1000; 
+          try {
+            const tx = await this.contract.methods.swapETHForUSDC(amountOutMin, deadline).send({
+              from: this.account,
+              value: valueWei,
+            })
+            .on('transactionHash', hash => {
+              this.statusText = '交易已广播，TX Hash: ' + hash.substring(0, 10) + '...';
+              this.pollTransaction(hash);
+            });
+          } catch (e) {
+            console.error(e);
+            this.statusText = '交易失败 ❌';
+            setTimeout(() => this.loading = false, 2000);
+          }
+        },
+        pollTransaction(txHash) {
+          this.pollInterval = setInterval(async () => {
+            try {
+              const receipt = await this.web3.eth.getTransactionReceipt(txHash);
+              if (receipt) {
+                if (receipt.status) {
+                  this.statusText = '交易已成功 ✅';
+                  await this.setUSDCBalance();
+                } else {
+                  this.statusText = '交易失败 ❌';
+                }
+                clearInterval(this.pollInterval);
+                setTimeout(() => this.loading = false, 2000);
+              } else {
+                this.statusText = '交易处理中...';
+              }
+            } catch (err) {
+              console.error(err);
+              this.statusText = '轮询交易状态出错';
+              clearInterval(this.pollInterval);
+              setTimeout(() => this.loading = false, 2000);
+            }
+          }, 3000);
+        }
+      }
+    })
+  </script>
+</body>
+</html>
