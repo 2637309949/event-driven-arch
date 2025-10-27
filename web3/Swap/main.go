@@ -12,7 +12,7 @@ var (
 	topic          = "EventOccurred"
 	redisAddr      = "127.0.0.1:6379"
 	driverName     = "postgres"
-	dataSourceName = "postgres://:@127.0.0.1:5432/web3?sslmode=disable"
+	dataSourceName = "postgres://:@127.0.0.1:5432/swap?sslmode=disable"
 	ctx            = context.Background()
 	logger         = watermill.NewStdLogger(false, false)
 	db             = Open(driverName, dataSourceName)

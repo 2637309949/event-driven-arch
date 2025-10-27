@@ -127,6 +127,7 @@ func (c *Contract) Watch(ctx context.Context) {
 					log.Println("Unknown event:", nc.Topics[0].Hex())
 					continue
 				}
+				Infof("-------swapCh%v", ev)
 				c.eventBus.Publish(ctx, ev)
 			/// ---- Store 事件 ----
 			case ev := <-itemSetChan:
@@ -135,7 +136,7 @@ func (c *Contract) Watch(ctx context.Context) {
 				cmd.Value = ev.Value
 				c.commandBus.Send(ctx, cmd)
 			case err := <-itemSub.Err():
-				log.Fatal("Watch.itemSub fatal:", err)
+				Fatalf("Watch.itemSub fatal:", err)
 			}
 		}
 	}()

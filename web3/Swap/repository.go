@@ -95,7 +95,7 @@ func (s *Repository) InsertEventParsed(ctx context.Context, ep *EventParsed) err
         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
         ON CONFLICT ON CONSTRAINT uq_parsed_tx_log DO NOTHING`,
 		ep.TxHash, ep.LogIndex, ep.BlockNumber, ep.BlockTime, ep.ContractAddress, ep.EventName,
-		ep.FromAddress, ep.ToAddress, ep.TokenID, ep.Value, ep.Metadata,
+		ep.FromAddress, ep.ToAddress, ep.TokenID, ep.Value.String(), ep.Metadata,
 	)
 	if err != nil {
 		return err
@@ -132,7 +132,6 @@ func (s *Repository) QueryEventStats(ctx context.Context) ([]EventStats, error) 
 
 	return stats, nil
 }
-
 
 func (s *Repository) UpsertEventStats(ctx context.Context, ep *EventStats) error {
 	_, err := s.db.ExecContext(ctx, `

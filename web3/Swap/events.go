@@ -139,22 +139,18 @@ func NewRouters(ctx context.Context, cfg *Config, repo *Repository) *Routers {
 				case "SwapSucceeded":
 					// SwapSucceeded(address indexed user, uint ethAmount, uint tokenAmount)
 					contractAbi, _ := abi.JSON(strings.NewReader(swap.SwapABI))
-					var out []interface{}
-					err := contractAbi.UnpackIntoInterface(&out, "SwapSucceeded", ev.Data)
+					type SwapSucceededEvent struct {
+						EthAmount   *big.Int
+						TokenAmount *big.Int
+					}
+					var evData SwapSucceededEvent
+					err := contractAbi.UnpackIntoInterface(&evData, "SwapSucceeded", ev.Data)
 					if err != nil {
 						log.Println("Unpack SwapSucceeded err:", err)
 						return err
 					}
 
 					user := common.HexToAddress(ev.Topic1)
-					var ethAmount, tokenAmount *big.Int
-					if len(out) > 0 {
-						ethAmount = *abi.ConvertType(out[0], new(*big.Int)).(**big.Int)
-					}
-					if len(out) > 1 {
-						tokenAmount = *abi.ConvertType(out[1], new(*big.Int)).(**big.Int)
-					}
-
 					ep := EventParsed{
 						TxHash:          ev.TxHash,
 						LogIndex:        ev.LogIndex,
@@ -164,9 +160,8 @@ func NewRouters(ctx context.Context, cfg *Config, repo *Repository) *Routers {
 						EventName:       ev.EventName,
 						FromAddress:     user.Hex(),
 						ToAddress:       user.Hex(),
-						Value:           tokenAmount,
-						Metadata: fmt.Sprintf(`{"ethAmount":"%v","tokenAmount":"%v"}`,
-							ethAmount, tokenAmount),
+						Value:           evData.TokenAmount,
+						Metadata:        fmt.Sprintf(`{"ethAmount":"%v","tokenAmount":"%v"}`, evData.EthAmount, evData.TokenAmount),
 					}
 
 					err = repo.InsertEventParsed(ctx, &ep)
