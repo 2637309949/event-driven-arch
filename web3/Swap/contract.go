@@ -101,11 +101,11 @@ func (c *Contract) FilterLogsByTime(ctx context.Context, contractAddr common.Add
 // 实时监控
 func (c *Contract) Watch(ctx context.Context) {
 	// ──────────────── 1. Swap 事件监听 ────────────────
-	swapCh := make(chan types.Log)
+	swapChan := make(chan types.Log)
 	swapAbi, _ := abi.JSON(strings.NewReader(swap.SwapABI))
 	swapSub, err := c.client.SubscribeFilterLogs(ctx, ethereum.FilterQuery{
 		Addresses: []common.Address{swapAddress},
-	}, swapCh)
+	}, swapChan)
 	if err != nil {
 		panic(err)
 	}
@@ -119,15 +119,12 @@ func (c *Contract) Watch(ctx context.Context) {
 		for {
 			select {
 			/// ---- Swap 事件 ----
-			case err := <-swapSub.Err():
-				log.Fatal("Watch.swapSub fatal:", err)
-			case nc := <-swapCh:
+			case nc := <-swapChan:
 				ev, err := c.ParseEventLog(ctx, swapAbi, nc)
 				if err != nil {
 					log.Println("Unknown event:", nc.Topics[0].Hex())
 					continue
 				}
-				Infof("-------swapCh%v", ev)
 				c.eventBus.Publish(ctx, ev)
 			/// ---- Store 事件 ----
 			case ev := <-itemSetChan:
@@ -137,6 +134,8 @@ func (c *Contract) Watch(ctx context.Context) {
 				c.commandBus.Send(ctx, cmd)
 			case err := <-itemSub.Err():
 				Fatalf("Watch.itemSub fatal:", err)
+			case err := <-swapSub.Err():
+				log.Fatal("Watch.swapSub fatal:", err)
 			}
 		}
 	}()

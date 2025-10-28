@@ -134,7 +134,6 @@ func NewRouters(ctx context.Context, cfg *Config, repo *Repository) *Routers {
 			"EventParsedHandler",
 			func(ctx context.Context, ev *EventLog) error {
 				fmt.Printf("SwapEventParsedHandler EventName=%v, TxHash=%v\n", ev.EventName, ev.TxHash)
-
 				switch ev.EventName {
 				case "SwapSucceeded":
 					// SwapSucceeded(address indexed user, uint ethAmount, uint tokenAmount)
@@ -163,13 +162,11 @@ func NewRouters(ctx context.Context, cfg *Config, repo *Repository) *Routers {
 						Value:           evData.TokenAmount,
 						Metadata:        fmt.Sprintf(`{"ethAmount":"%v","tokenAmount":"%v"}`, evData.EthAmount, evData.TokenAmount),
 					}
-
 					err = repo.InsertEventParsed(ctx, &ep)
 					if err != nil {
 						log.Println("InsertEventParsed err:", err)
 						return err
 					}
-
 				case "SwapFailed":
 					// SwapFailed(address indexed user, uint ethAmount, string reason)
 					contractAbi, _ := abi.JSON(strings.NewReader(swap.SwapABI))
@@ -200,13 +197,11 @@ func NewRouters(ctx context.Context, cfg *Config, repo *Repository) *Routers {
 						FromAddress:     user.Hex(),
 						Metadata:        fmt.Sprintf(`{"ethAmount":"%v","reason":"%v"}`, ethAmount, reason),
 					}
-
 					err = repo.InsertEventParsed(ctx, &ep)
 					if err != nil {
 						log.Println("InsertEventParsed err:", err)
 						return err
 					}
-
 				default:
 					log.Println("Unknown swap event:", ev.EventName)
 				}
@@ -220,20 +215,9 @@ func NewRouters(ctx context.Context, cfg *Config, repo *Repository) *Routers {
 				fmt.Printf("EventStatsHandler EventName=%v, TxHash=%v\n", ev.EventName, ev.TxHash)
 				eventName := ev.EventName
 				switch eventName {
-				case "Transfer":
+				case "SwapSucceeded":
 					ep := EventStats{
-						EventLabel: "转账次数",
-						EventName:  ev.EventName,
-						EventCount: 1,
-					}
-					err = repo.UpsertEventStats(ctx, &ep)
-					if err != nil {
-						log.Println("UpsertEventStats err:", err)
-						return err
-					}
-				case "Minted":
-					ep := EventStats{
-						EventLabel: "NFT 铸造",
+						EventLabel: "撮合交易",
 						EventName:  ev.EventName,
 						EventCount: 1,
 					}
